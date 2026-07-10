@@ -639,6 +639,16 @@ else
 fi
 [ -f "$BRIEF" ] || { echo "error: no brief at $BRIEF" >&2; exit 1; }
 
+# Machine-check the supervision contract before any worktree/backend setup: a
+# malformed brief (hand-written or scaffold-bug output) must never launch a
+# blind crewmate. Ship and scout only; a secondmate's launch prompt is a
+# charter, not this contract.
+if [ "$KIND" != secondmate ]; then
+  LINT_ARGS=("$ID")
+  [ "$KIND" = scout ] && LINT_ARGS+=(--scout)
+  "$FM_ROOT/bin/fm-brief-lint.sh" "${LINT_ARGS[@]}" || { echo "error: brief lint failed for $ID; refusing to launch (see brief-lint output above)" >&2; exit 1; }
+fi
+
 # PROJ_ABS can still carry a symlinked path component (e.g. macOS's /tmp ->
 # /private/tmp) when it came from the ship/scout branch's logical `pwd` above.
 # Every backend's own current-path read (tmux's pane_current_path, herdr's

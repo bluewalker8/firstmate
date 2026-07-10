@@ -743,6 +743,8 @@ Before seeding, launching, recovering, or handing backlog to a secondmate home, 
 The status-reporting protocol is intentionally sparse: crewmates append status only for supervisor-actionable phase changes or `needs-decision`/`blocked`/`paused`/`done`/`failed`, because every append wakes firstmate.
 For any generated brief that still contains `{TASK}`, replace it with a clear task description, acceptance criteria, and any constraints or context the crewmate needs before spawning or seeding.
 Adjust the other sections only when the task genuinely deviates from the standard ship-a-new-PR shape (e.g. fixing an existing external PR); the scaffold is the contract, not a suggestion.
+`bin/fm-spawn.sh` machine-checks every ship or scout brief with `bin/fm-brief-lint.sh <id> [--scout]` before it launches anything, and refuses the launch on a hard failure (missing brief, an unreplaced `{TASK}`, or the exact absolute `state/<id>.status` path appearing nowhere in the brief).
+A hand-written brief must state that exact absolute path as its append target - a relative `state/<id>.status` mention lets the crewmate create `state/` INSIDE its own project worktree, invisible to the watcher and liable to be committed into the project.
 
 ## 12. Self-update
 
