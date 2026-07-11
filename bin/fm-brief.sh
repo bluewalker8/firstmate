@@ -106,7 +106,6 @@ shell_quote() {
 }
 
 STATUS_FILE=$(shell_quote "$STATE/$ID.status")
-DISCUSSION_FILE=$(shell_quote "$DATA/$ID/discussion.md")
 
 if [ "$KIND" = secondmate ]; then
 SECONDMATE_PROJECTS=""
@@ -234,7 +233,7 @@ The report is the only thing that survives, so anything worth keeping must be in
 
 # Rules
 1. Never push to any remote and never open a PR.
-2. Stay inside this worktree; the only files you may write outside it are the report and the status file below.
+2. Stay inside this worktree; the only files you may write outside it are the report, the status file, and the discussion file below.
 3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
@@ -247,7 +246,7 @@ The report is the only thing that survives, so anything worth keeping must be in
    firstmate then leaves your idle pane alone and rechecks it on a long cadence instead of
    treating it as a possible wedge. Use \`blocked:\` when you are stuck and need help.
    If you hit a fork, ambiguity, or finding that cannot be stated faithfully in one line, append it
-   instead to \`$DISCUSSION_FILE\` under a \`## question {n}\` heading: the situation, the options you
+   instead to \`$DATA/$ID/discussion.md\` under a \`## question {n}\` heading: the situation, the options you
    see, and your recommendation. Then report \`needs-decision: see discussion\` (or \`blocked: see
    discussion\`) on the status line above. Firstmate answers under \`## answer {n}\` in that same file
    and steers you with \`answered in discussion - continue\`; it is append-only and survives teardown,
@@ -353,7 +352,7 @@ $RULE1
    a scheduled window): firstmate then leaves your idle pane alone and rechecks it on a long
    cadence instead of treating it as a possible wedge. Use \`blocked:\` when you are stuck and need help.
    If you hit a fork, ambiguity, or finding that cannot be stated faithfully in one line, append it
-   instead to \`$DISCUSSION_FILE\` under a \`## question {n}\` heading: the situation, the options you
+   instead to \`$DATA/$ID/discussion.md\` under a \`## question {n}\` heading: the situation, the options you
    see, and your recommendation. Then report \`needs-decision: see discussion\` (or \`blocked: see
    discussion\`) on the status line above. Firstmate answers under \`## answer {n}\` in that same file
    and steers you with \`answered in discussion - continue\`; it is append-only and survives teardown,
