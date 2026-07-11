@@ -593,4 +593,9 @@ if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ]; then
   x_mode_setup
   fleet_sync
 fi
+# Best-effort fleet-board keybind: a tmux-server-only mutation, not fleet
+# state, so it runs unconditionally (no lock needed) and never fails
+# bootstrap. fm-board-bind.sh itself is silent when already bound and skips
+# when not inside tmux.
+"$SCRIPT_DIR/fm-board-bind.sh" 2>&1 || true
 exit 0

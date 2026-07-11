@@ -577,7 +577,10 @@ bin/fm-watch.sh                     # the watcher itself; exits with: signal|sta
 bin/fm-wake-drain.sh                # drain queued wake records at turn start; asserts guard after draining
 bin/fm-crew-state.sh <id>           # one-line current-state read; reconciles matching run-step, pane, and status log
 bin/fm-fleet-view.sh                # read-only Markdown whole-fleet view rendered from the structured snapshot
+bin/fm-board.sh --watch             # captain-facing visual board: per-task progress bar, grouped by project
 ```
+
+The captain's own view into the fleet is a hidden tmux popup, not a Markdown read: `bin/fm-board-bind.sh` binds prefix+F (or prefix+B if F is taken) on the current tmux server to `bin/fm-board.sh --watch`, and `bin/fm-bootstrap.sh` re-runs that installer best-effort on every session start so the binding survives restarts without captain action.
 
 On wake, in order of cheapness:
 
