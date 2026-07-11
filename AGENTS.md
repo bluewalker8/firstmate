@@ -424,7 +424,7 @@ Batch dispatch spawns each `id=repo` pair through the same single-task path, wit
 When `config/crew-dispatch.json` exists, include an explicit resolved harness for every crewmate or scout spawn or batch after consulting the dispatch rules (section 4).
 `bin/fm-spawn.sh`'s header owns the full resolution contract: harness and runtime-backend resolution order, spawn-capable backends and the `codex-app` rejection, verified launch templates, delivery-mode resolution, recorded meta fields, and per-harness turn-end hook installation.
 A backend spawn refusal - a missing dependency, an unauthenticated socket, or a version gate - must be surfaced to the captain as a blocker; never silently retry the spawn on a different backend to work around it.
-For ship and scout tasks, the script asserts the resolved worktree is a genuine isolated worktree distinct from the primary checkout, aborting the spawn otherwise to prevent the worktree tangle of section 8.
+For ship and scout tasks, the script asserts the resolved worktree is a genuine isolated worktree distinct from the primary checkout, aborting the spawn otherwise to prevent the worktree tangle of section 8, and it lint-checks the brief with `bin/fm-brief-lint.sh` before any worktree or backend setup, aborting the spawn on a hard failure per the brief contract of section 11.
 For `kind=secondmate`, it launches in the registered or explicit firstmate home with the charter brief as the launch prompt, after the guarded home sync and inheritable-config propagation owned by `secondmate-provisioning`.
 Project worktrees start at detached HEAD on a clean default branch; ship briefs tell the crewmate to create its branch, while scout briefs keep the worktree scratch.
 After spawning, peek the endpoint to confirm the crewmate is processing the brief and handle any trust dialog with `harness-adapters`.
@@ -743,6 +743,8 @@ Before seeding, launching, recovering, or handing backlog to a secondmate home, 
 The status-reporting protocol is intentionally sparse: crewmates append status only for supervisor-actionable phase changes or `needs-decision`/`blocked`/`paused`/`done`/`failed`, because every append wakes firstmate.
 For any generated brief that still contains `{TASK}`, replace it with a clear task description, acceptance criteria, and any constraints or context the crewmate needs before spawning or seeding.
 Adjust the other sections only when the task genuinely deviates from the standard ship-a-new-PR shape (e.g. fixing an existing external PR); the scaffold is the contract, not a suggestion.
+`bin/fm-spawn.sh` machine-checks every ship or scout brief with `bin/fm-brief-lint.sh <id> [--scout]` before it launches anything, and refuses the launch on a hard failure (missing brief, an unreplaced `{TASK}`, or the exact absolute `state/<id>.status` path appearing nowhere in the brief).
+A hand-written brief must state that exact absolute path as its append target - a relative `state/<id>.status` mention lets the crewmate create `state/` INSIDE its own project worktree, invisible to the watcher and liable to be committed into the project.
 
 ## 12. Self-update
 

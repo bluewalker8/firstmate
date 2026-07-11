@@ -160,6 +160,65 @@ fm_write_secondmate_meta() {
     "projects=$projects"
 }
 
+# --- lint-valid brief fixtures -----------------------------------------------
+#
+# bin/fm-brief-lint.sh (run by fm-spawn.sh before every ship/scout launch)
+# hard-fails a brief that never states the exact absolute
+# <state-dir>/<id>.status path. These writers keep fixture briefs lint-valid
+# so spawn-machinery tests exercise fm-spawn.sh without tripping that gate.
+
+# fm_write_ship_brief <path> <id> <state_dir>: write a minimal fixture ship
+# brief that satisfies fm-brief-lint.sh's hard-fail checks (absolute status
+# path, no {TASK}) and its ship-only warn checks (worktree-isolation
+# phrasing, definition-of-done, status-protocol section).
+fm_write_ship_brief() {
+  local path=$1 id=$2 state_dir=$3
+  mkdir -p "$(dirname "$path")"
+  cat > "$path" <<EOF
+Test fixture crewmate brief.
+
+# Setup
+Verify isolation before anything else: not the primary checkout, an isolated worktree.
+
+# Status protocol
+Report status by appending: echo "{state}: msg" >> $state_dir/$id.status
+
+# Definition of done
+Append done when finished.
+EOF
+}
+
+# fm_write_scout_brief <path> <id> <state_dir>: like fm_write_ship_brief but
+# without the ship-only worktree-isolation phrasing.
+fm_write_scout_brief() {
+  local path=$1 id=$2 state_dir=$3
+  mkdir -p "$(dirname "$path")"
+  cat > "$path" <<EOF
+Test fixture scout brief.
+
+# Status protocol
+Report status by appending: echo "{state}: msg" >> $state_dir/$id.status
+
+# Definition of done
+Write findings to the report.
+EOF
+}
+
+# --- node .ts-import test opt-in ---------------------------------------------
+#
+# fm_enable_ts_node_opts: export NODE_OPTIONS with the flags a node-based
+# fixture test needs to dynamically import a .ts extension file and to
+# suppress the benign ESM-detection warning node prints when no ancestor
+# package.json declares "type": "module" (harmless noise unrelated to what
+# the test is actually checking). Capability-probed: a no-op on a node build
+# that does not support --experimental-strip-types, so it never breaks an
+# older or differently-behaved node - it only helps where it can.
+
+fm_enable_ts_node_opts() {
+  node --experimental-strip-types --no-warnings -e '' >/dev/null 2>&1 || return 0
+  export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-strip-types --no-warnings"
+}
+
 # --- common assertions ------------------------------------------------------
 
 # assert_contains <haystack> <needle> <msg>

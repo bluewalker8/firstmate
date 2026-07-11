@@ -56,7 +56,11 @@
 #   Before a secondmate launch, the home is locally fast-forwarded to the primary
 #   default-branch commit when safe; skipped syncs warn and launch unchanged.
 #   Ship/scout spawns refuse to launch unless the resolved task path is a real
-#   git worktree root distinct from the primary project checkout.
+#   git worktree root distinct from the primary project checkout, and unless the
+#   brief passes bin/fm-brief-lint.sh (a missing brief, an unreplaced {TASK}, or a
+#   status-append target that is not the exact absolute state/<id>.status path is a
+#   hard failure that aborts the launch). Secondmate launch prompts are charters and
+#   are not linted.
 # Batch dispatch: pass one or more `id=repo` pairs instead of a single <id> <project>, e.g.
 #     fm-spawn.sh fix-a-k3=projects/foo add-b-q7=projects/bar [--scout]
 #   Each pair re-execs this script in single-task mode, so the single path stays the only
@@ -638,6 +642,16 @@ else
   BRIEF="$DATA/$ID/brief.md"
 fi
 [ -f "$BRIEF" ] || { echo "error: no brief at $BRIEF" >&2; exit 1; }
+
+# Machine-check the supervision contract before any worktree/backend setup: a
+# malformed brief (hand-written or scaffold-bug output) must never launch a
+# blind crewmate. Ship and scout only; a secondmate's launch prompt is a
+# charter, not this contract.
+if [ "$KIND" != secondmate ]; then
+  LINT_ARGS=("$ID")
+  [ "$KIND" = scout ] && LINT_ARGS+=(--scout)
+  "$FM_ROOT/bin/fm-brief-lint.sh" "${LINT_ARGS[@]}" || { echo "error: brief lint failed for $ID; refusing to launch (see brief-lint output above)" >&2; exit 1; }
+fi
 
 # PROJ_ABS can still carry a symlinked path component (e.g. macOS's /tmp ->
 # /private/tmp) when it came from the ship/scout branch's logical `pwd` above.

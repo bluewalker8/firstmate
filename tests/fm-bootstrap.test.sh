@@ -118,6 +118,11 @@ make_fake_fleet_sync_root() {
 [ -z "${FM_FAKE_FLEET_SYNC_STARTED_MARKER:-}" ] || : > "$FM_FAKE_FLEET_SYNC_STARTED_MARKER"
 printf '%s\n' 'alpha: synced'
 printf '%s\n' 'beta: skipped: no origin remote'
+# Written AFTER the partial output so its presence guarantees the two lines
+# above are already on stdout (which the parent redirected to its temp file).
+# The parent's faked sleep waits on this to make the partial-output relay
+# deterministic under host load, instead of racing a fixed wall-clock window.
+[ -z "${FM_FAKE_FLEET_SYNC_READY_MARKER:-}" ] || : > "$FM_FAKE_FLEET_SYNC_READY_MARKER"
 exec perl -e 'sleep 300'
 SH
   chmod +x "$fake_root/bin/fm-fleet-sync.sh"
@@ -148,21 +153,33 @@ add_no_origin_projects() {
 }
 
 run_bootstrap_timeout_case() {
-  local home=$1 fake_root=$2 fakebin=$3 override started_marker git_record wait_for_marker
+  local home=$1 fake_root=$2 fakebin=$3 override started_marker git_record wait_for_marker ready_marker
   override=__unset__
   started_marker=${5:-}
   git_record=${6:-}
   wait_for_marker=${7:-0}
+  ready_marker=${8:-}
   [ "$#" -lt 4 ] || override=$4
   (
     # shellcheck disable=SC2317,SC2329 # Exported and invoked by the bootstrap subprocess.
     sleep() {
-      local inc=${1:-1}
-      SECONDS=$((SECONDS + inc))
-      if [ "${FM_FAKE_SLEEP_YIELDS:-0}" -lt 5 ]; then
+      local inc=${1:-1} waited
+      # When a ready marker is configured, block until the background fake
+      # fleet-sync has flushed its partial output (marker written after it),
+      # so simulated time never reaches the timeout before that output lands.
+      # This removes the wall-clock race that otherwise loses the partial
+      # output on a loaded host.
+      if [ -n "${FM_FAKE_FLEET_SYNC_READY_MARKER:-}" ] && [ ! -e "$FM_FAKE_FLEET_SYNC_READY_MARKER" ]; then
+        waited=0
+        while [ ! -e "$FM_FAKE_FLEET_SYNC_READY_MARKER" ] && [ "$waited" -lt 500 ]; do
+          command sleep 0.01
+          waited=$((waited + 1))
+        done
+      elif [ "${FM_FAKE_SLEEP_YIELDS:-0}" -lt 5 ]; then
         FM_FAKE_SLEEP_YIELDS=$((${FM_FAKE_SLEEP_YIELDS:-0} + 1))
         command sleep 0.01
       fi
+      SECONDS=$((SECONDS + inc))
     }
     # shellcheck disable=SC2317,SC2329 # Exported and invoked by the bootstrap subprocess.
     git() {
@@ -184,6 +201,7 @@ run_bootstrap_timeout_case() {
     if [ "$override" = __unset__ ]; then
       PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$fake_root" \
         FM_FAKE_FLEET_SYNC_STARTED_MARKER="$started_marker" \
+        FM_FAKE_FLEET_SYNC_READY_MARKER="$ready_marker" \
         FM_FAKE_GIT_SYNC_STARTED_RECORD="$git_record" \
         FM_FAKE_GIT_WAIT_FOR_FLEET_START="$wait_for_marker" \
         FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null
@@ -191,6 +209,7 @@ run_bootstrap_timeout_case() {
       PATH="$fakebin:$BASE_PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$fake_root" \
         FM_FLEET_SYNC_BOOTSTRAP_TIMEOUT="$override" \
         FM_FAKE_FLEET_SYNC_STARTED_MARKER="$started_marker" \
+        FM_FAKE_FLEET_SYNC_READY_MARKER="$ready_marker" \
         FM_FAKE_GIT_SYNC_STARTED_RECORD="$git_record" \
         FM_FAKE_GIT_WAIT_FOR_FLEET_START="$wait_for_marker" \
         FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh" 2>/dev/null
@@ -361,7 +380,9 @@ test_fleet_sync_timeout_scales_with_origin_backed_project_count() {
   fakebin=$(make_fake_toolchain "$case_dir")
   fake_root=$(make_fake_fleet_sync_root "$case_dir")
 
-  out=$(run_bootstrap_timeout_case "$home" "$fake_root" "$fakebin")
+  # Gate simulated time on the fake fleet-sync's ready marker so the partial
+  # output is deterministically captured before the 59s timeout fires.
+  out=$(run_bootstrap_timeout_case "$home" "$fake_root" "$fakebin" __unset__ "" "" 0 "$case_dir/fleet-ready")
 
   expected=$'FLEET_SYNC: alpha: synced\nFLEET_SYNC: beta: skipped: no origin remote\nFLEET_SYNC: fleet: skipped: bootstrap refresh timed out (timeout=59s elapsed=59s)'
   assert_contains "$out" "$expected" "bootstrap timeout should scale to 59s for 18 origin-backed projects and relay partial output first"

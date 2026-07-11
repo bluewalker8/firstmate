@@ -12,6 +12,7 @@ set -u
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+fm_enable_ts_node_opts
 
 # shellcheck source=bin/fm-supervision-lib.sh
 . "$ROOT/bin/fm-supervision-lib.sh"
