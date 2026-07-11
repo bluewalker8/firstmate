@@ -65,14 +65,16 @@ fi
 POPUP_CMD=(display-popup -E -w 80% -h 70% "$BOARD_SH --watch")
 
 # key_binding_line <key>: the current `bind-key -T prefix <key> ...` line, or
-# empty if unbound. The optional "-r " group matches a repeat binding (e.g.
-# `bind -r F ...` renders as `bind-key -r -T prefix F ...`) - verified live
-# against tmux's own list-keys output; without it, a captain's own repeat
-# binding on the target key reads as "unbound" and gets silently overwritten,
-# exactly the clobber this installer exists to avoid.
+# empty if unbound. tmux reconstructs a binding with any of its optional flags
+# before `-T`, in any order: `-r` (repeat, e.g. `bind-key -r -T prefix G ...`)
+# and, on tmux builds that emit it, `-N "note"` (e.g.
+# `bind-key -N "..." -T prefix F ...`). The `(-r|-N "...")` group tolerates zero
+# or more of those in any order, so a captain's own repeat- or note-carrying
+# binding on the target key never reads as "unbound" and gets silently
+# overwritten, exactly the clobber this installer exists to avoid.
 key_binding_line() {
   tmux_cmd list-keys -T prefix 2>/dev/null \
-    | grep -E "^bind-key[[:space:]]+(-r[[:space:]]+)?-T[[:space:]]+prefix[[:space:]]+$1[[:space:]]" \
+    | grep -E "^bind-key[[:space:]]+((-r|-N[[:space:]]+\"[^\"]*\")[[:space:]]+)*-T[[:space:]]+prefix[[:space:]]+$1[[:space:]]" \
     | tail -1
 }
 
