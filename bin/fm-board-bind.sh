@@ -90,8 +90,14 @@ bind_key() {  # <key>
 }
 
 print_permanent_line() {  # <key>
-  printf 'fm-board-bind: to make this permanent, add to ~/.tmux.conf:\n'
-  printf '  bind %s display-popup -E -w 80%% -h 70%% "%s --watch"\n' "$1" "$BOARD_SH"
+  # >&2, matching every other message in this script: this is captain-facing
+  # FYI, not program output, and bin/fm-bootstrap.sh's caller
+  # (bin/fm-session-start.sh) already folds this script's stderr into its own
+  # digest - a stdout leak here would corrupt bootstrap.sh's own "silent when
+  # all good" contract instead (tested by tests/fm-bootstrap.test.sh, which
+  # captures only stdout).
+  printf 'fm-board-bind: to make this permanent, add to ~/.tmux.conf:\n' >&2
+  printf '  bind %s display-popup -E -w 80%% -h 70%% "%s --watch"\n' "$1" "$BOARD_SH" >&2
 }
 
 TARGET_KEY=""
