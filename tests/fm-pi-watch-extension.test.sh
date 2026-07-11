@@ -5,6 +5,14 @@ set -u
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+# These tests import the tracked .ts/.js extensions with a bare `node`. Node strips
+# TypeScript by default only on >= 23.6, so enable it explicitly to keep the suite
+# green on 22.6+. Suppress the two purely-advisory Node notices (the type-strip
+# experimental note, and the module-type perf hint that fires only when an ambient
+# package.json sits above the repo) so neither leaks into the strict `[ -z "$out" ]`
+# assertions. Both are no-ops where type stripping is already the default.
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON"
+
 TMP_ROOT=$(fm_test_tmproot fm-pi-watch-extension)
 EXT="$ROOT/.pi/extensions/fm-primary-pi-watch.ts"
 
