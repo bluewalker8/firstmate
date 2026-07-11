@@ -115,9 +115,11 @@ make_fake_fleet_sync_root() {
   mkdir -p "$fake_root/bin"
   cat > "$fake_root/bin/fm-fleet-sync.sh" <<'SH'
 #!/usr/bin/env bash
-[ -z "${FM_FAKE_FLEET_SYNC_STARTED_MARKER:-}" ] || : > "$FM_FAKE_FLEET_SYNC_STARTED_MARKER"
 printf '%s\n' 'alpha: synced'
 printf '%s\n' 'beta: skipped: no origin remote'
+# Signal AFTER the partial output is flushed so a marker-gated caller can
+# treat the timeout relay as a deterministic read rather than a scheduling race.
+[ -z "${FM_FAKE_FLEET_SYNC_STARTED_MARKER:-}" ] || : > "$FM_FAKE_FLEET_SYNC_STARTED_MARKER"
 exec perl -e 'sleep 300'
 SH
   chmod +x "$fake_root/bin/fm-fleet-sync.sh"
@@ -158,6 +160,18 @@ run_bootstrap_timeout_case() {
     # shellcheck disable=SC2317,SC2329 # Exported and invoked by the bootstrap subprocess.
     sleep() {
       local inc=${1:-1}
+      # When a partial-output marker is in play, hold the collapsed-SECONDS
+      # clock until the backgrounded fake fleet-sync has actually flushed its
+      # output, so the timeout relay reads real content instead of racing an
+      # unscheduled child (the fake sleep compresses 59s of SECONDS into a few
+      # real milliseconds, which the child cannot always win under load).
+      if [ -n "${FM_FAKE_FLEET_SYNC_STARTED_MARKER:-}" ] && [ ! -e "$FM_FAKE_FLEET_SYNC_STARTED_MARKER" ]; then
+        local waited=0
+        while [ "$waited" -lt 500 ] && [ ! -e "$FM_FAKE_FLEET_SYNC_STARTED_MARKER" ]; do
+          command sleep 0.01
+          waited=$((waited + 1))
+        done
+      fi
       SECONDS=$((SECONDS + inc))
       if [ "${FM_FAKE_SLEEP_YIELDS:-0}" -lt 5 ]; then
         FM_FAKE_SLEEP_YIELDS=$((${FM_FAKE_SLEEP_YIELDS:-0} + 1))
@@ -361,7 +375,7 @@ test_fleet_sync_timeout_scales_with_origin_backed_project_count() {
   fakebin=$(make_fake_toolchain "$case_dir")
   fake_root=$(make_fake_fleet_sync_root "$case_dir")
 
-  out=$(run_bootstrap_timeout_case "$home" "$fake_root" "$fakebin")
+  out=$(run_bootstrap_timeout_case "$home" "$fake_root" "$fakebin" __unset__ "$case_dir/fleet-started")
 
   expected=$'FLEET_SYNC: alpha: synced\nFLEET_SYNC: beta: skipped: no origin remote\nFLEET_SYNC: fleet: skipped: bootstrap refresh timed out (timeout=59s elapsed=59s)'
   assert_contains "$out" "$expected" "bootstrap timeout should scale to 59s for 18 origin-backed projects and relay partial output first"
