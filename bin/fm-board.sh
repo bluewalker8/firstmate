@@ -21,6 +21,9 @@
 #                only when the log's last verb was needs-decision/blocked
 #                (the log is an append-only event log and goes stale the
 #                moment a resolved gate lets the crew resume).
+#   paused     - fm-crew-state.sh's CURRENT state is paused (a declared
+#                external wait, not a captain-decision gate - not counted in
+#                the gated-on-you footer).
 #   done / failed - the log's last verb, or fm-crew-state.sh's reconciled
 #                current state for a verb that turned out to be ambiguous.
 # kind=secondmate tasks are excluded: they are persistent supervisors with no
@@ -126,6 +129,13 @@ crew_current_state() {  # <id>
   printf '%s|%s' "$state" "$source"
 }
 
+# detect_stage prints "<stage>|<slow>" where slow=1 iff this call consulted
+# fm-crew-state.sh (0 for a stage decided purely from cheap, static file
+# content). The caller uses that flag to decide how long a cached result may
+# be trusted: a slow=1 result can go stale with NO local file change at all
+# (e.g. the captain answers a gate and the crew resumes silently - see the
+# needs-decision/blocked branch below), so it must expire on a short TTL
+# rather than being cached indefinitely on mtimes alone.
 detect_stage() {  # <id> <meta-file> <status-log>
   local id=$1 meta=$2 log=$3
   local pr last_line last_verb last_note base cs cs_state cs_source
@@ -148,16 +158,18 @@ detect_stage() {  # <id> <meta-file> <status-log>
   # The log verb alone is not trusted (it may already be stale - the captain
   # answered the gate and the crew resumed), so this reconciles via
   # fm-crew-state.sh once: parked/blocked confirms the gate is still live;
-  # done/failed/working map to the reconciled state; anything else (unknown,
-  # none - a torn-down or unreadable target) fails toward gated rather than
-  # silently dropping the one signal the captain has that this task wants
-  # attention.
+  # paused is a declared external wait (not a captain-decision gate, so it is
+  # not counted as gated); done/failed/working map to the reconciled state;
+  # anything else (unknown, none - a torn-down or unreadable target) fails
+  # toward gated rather than silently dropping the one signal the captain has
+  # that this task wants attention.
   if [ "$last_verb" = needs-decision ] || [ "$last_verb" = blocked ]; then
     cs=$(crew_current_state "$id")
     cs_state=${cs%%|*}
     cs_source=${cs#*|}
     case "$cs_state" in
       parked|blocked) base=gated ;;
+      paused) base=paused ;;
       "done") base="done" ;;
       failed) base=failed ;;
       working)
@@ -165,7 +177,7 @@ detect_stage() {  # <id> <meta-file> <status-log>
         ;;
       *) base=gated ;;
     esac
-    printf '%s' "$base"
+    printf '%s|1' "$base"
     return
   fi
 
@@ -190,6 +202,7 @@ detect_stage() {  # <id> <meta-file> <status-log>
       cs_source=${cs#*|}
       case "$cs_state" in
         parked|blocked) base=gated ;;
+        paused) base=paused ;;
         "done") base="done" ;;
         failed) base=failed ;;
         working)
@@ -197,12 +210,14 @@ detect_stage() {  # <id> <meta-file> <status-log>
           ;;
         *) base=working ;;
       esac
+      printf '%s|1' "$base"
+      return
     fi
   else
     base=working
   fi
 
-  printf '%s' "$base"
+  printf '%s|0' "$base"
 }
 
 repeat_char() {  # <char> <count>
@@ -221,6 +236,7 @@ bar_for_stage() {  # <stage>
     "PR open") n=9 ;;
     "done") n=$BAR_WIDTH ;;
     gated) printf '[%s]' "$(repeat_char '!' "$BAR_WIDTH")"; return ;;
+    paused) printf '[%s]' "$(repeat_char '~' "$BAR_WIDTH")"; return ;;
     failed) printf '[%s]' "$(repeat_char 'x' "$BAR_WIDTH")"; return ;;
     *) n=0 ;;
   esac
@@ -287,30 +303,51 @@ gated_count_override() {
 # state watch loop into pure cheap reads instead of hammering the CLI every
 # cycle. Global (process-lifetime) so it persists across render_once calls in
 # the --watch loop below; a bash-3.2-safe stand-in for an associative array
-# via one "id<TAB>meta_mtime<TAB>status_mtime<TAB>stage" line per task.
+# via one "id<TAB>meta_mtime<TAB>status_mtime<TAB>stage<TAB>slow<TAB>stored_epoch"
+# line per task.
+#
+# slow=1 entries additionally expire on FM_BOARD_CACHE_TTL: a "gated" or
+# "validating" classification came from fm-crew-state.sh reconciling state
+# that can change with NO local file write at all (the captain answers a
+# needs-decision gate via `no-mistakes axi respond`, and the crew resumes
+# silently - no new status append, no meta change). Caching that result on
+# mtimes alone would make a resolved gate read as "gated on you" forever;
+# the TTL re-checks it periodically instead. slow=0 entries (spawned, a
+# done/failed/PR-open verdict read straight off the log or meta, a review
+# keyword match) are derived purely from the two files already in the cache
+# key, so they are valid until either mtime changes - no TTL needed.
 BOARD_CACHE=""
 
-cache_lookup() {  # <id> <meta_mtime> <status_mtime> -> stage on a hit, else empty + exit 1
-  local id=$1 mm=$2 sm=$3 line cmm csm cstage
+cache_lookup() {  # <id> <meta_mtime> <status_mtime> <now_epoch> -> stage on a hit, else exit 1
+  local id=$1 mm=$2 sm=$3 now=$4 line cmm csm cstage cslow cstored age
   line=$(printf '%s\n' "$BOARD_CACHE" | grep "^$id$(printf '\t')" | tail -1)
   [ -n "$line" ] || return 1
   cmm=$(printf '%s' "$line" | cut -d "$(printf '\t')" -f2)
   csm=$(printf '%s' "$line" | cut -d "$(printf '\t')" -f3)
   cstage=$(printf '%s' "$line" | cut -d "$(printf '\t')" -f4)
+  cslow=$(printf '%s' "$line" | cut -d "$(printf '\t')" -f5)
+  cstored=$(printf '%s' "$line" | cut -d "$(printf '\t')" -f6)
   [ "$cmm" = "$mm" ] && [ "$csm" = "$sm" ] || return 1
+  if [ "$cslow" = 1 ]; then
+    case "$cstored" in ''|*[!0-9]*) return 1 ;; esac
+    age=$((now - cstored))
+    [ "$age" -lt "${FM_BOARD_CACHE_TTL:-15}" ] || return 1
+  fi
   printf '%s' "$cstage"
 }
 
-cache_store() {  # <id> <meta_mtime> <status_mtime> <stage>
+cache_store() {  # <id> <meta_mtime> <status_mtime> <stage> <slow> <now_epoch>
   BOARD_CACHE=$(printf '%s\n' "$BOARD_CACHE" | grep -v "^$1$(printf '\t')")
   BOARD_CACHE="$BOARD_CACHE
-$1	$2	$3	$4"
+$1	$2	$3	$4	$5	$6"
 }
 
 render_once() {
   local meta id kind proj log stage epoch age bar rows in_flight=0 gated=0
-  local prev_group='' group override meta_mtime status_mtime cached
+  local prev_group='' group override meta_mtime status_mtime cached now_epoch
+  local raw_stage slow
 
+  now_epoch=$(date +%s)
   rows=""
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
@@ -323,11 +360,13 @@ render_once() {
     meta_mtime=$(stat_mtime "$meta")
     status_mtime=$(stat_mtime "$log" 2>/dev/null)
     [ -n "$status_mtime" ] || status_mtime=none
-    if cached=$(cache_lookup "$id" "$meta_mtime" "$status_mtime"); then
+    if cached=$(cache_lookup "$id" "$meta_mtime" "$status_mtime" "$now_epoch"); then
       stage=$cached
     else
-      stage=$(detect_stage "$id" "$meta" "$log")
-      cache_store "$id" "$meta_mtime" "$status_mtime" "$stage"
+      raw_stage=$(detect_stage "$id" "$meta" "$log")
+      stage=${raw_stage%|*}
+      slow=${raw_stage##*|}
+      cache_store "$id" "$meta_mtime" "$status_mtime" "$stage" "$slow" "$now_epoch"
     fi
     epoch=$(spawn_epoch "$meta")
     group=$(group_of "$meta")

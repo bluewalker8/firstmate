@@ -48,7 +48,14 @@ if [ ${#TMUX_ARGS[@]} -eq 0 ] && [ -z "${TMUX:-}" ]; then
   exit 0
 fi
 
-tmux_cmd() { tmux "${TMUX_ARGS[@]}" "$@"; }
+# ${TMUX_ARGS[@]+"${TMUX_ARGS[@]}"}, not a bare "${TMUX_ARGS[@]}": under
+# `set -u` on bash 3.2, expanding an EMPTY array with "${arr[@]}" is a hard
+# "unbound variable" error (bash 3.2 has no ${arr[@]:-} rescue for arrays,
+# unlike 4.4+) - verified empirically on this machine's own /bin/bash 3.2.57.
+# TMUX_ARGS is empty in the default (no FM_BOARD_BIND_TMUX_ARGS) case, which
+# is the normal in-tmux path bin/fm-bootstrap.sh actually runs, so this was a
+# guaranteed crash on every real invocation, not an edge case.
+tmux_cmd() { tmux ${TMUX_ARGS[@]+"${TMUX_ARGS[@]}"} "$@"; }
 
 if ! tmux_cmd list-sessions >/dev/null 2>&1; then
   echo "fm-board-bind: no reachable tmux server, skipping" >&2
@@ -58,10 +65,14 @@ fi
 POPUP_CMD=(display-popup -E -w 80% -h 70% "$BOARD_SH --watch")
 
 # key_binding_line <key>: the current `bind-key -T prefix <key> ...` line, or
-# empty if unbound.
+# empty if unbound. The optional "-r " group matches a repeat binding (e.g.
+# `bind -r F ...` renders as `bind-key -r -T prefix F ...`) - verified live
+# against tmux's own list-keys output; without it, a captain's own repeat
+# binding on the target key reads as "unbound" and gets silently overwritten,
+# exactly the clobber this installer exists to avoid.
 key_binding_line() {
   tmux_cmd list-keys -T prefix 2>/dev/null \
-    | grep -E "^bind-key[[:space:]]+-T[[:space:]]+prefix[[:space:]]+$1[[:space:]]" \
+    | grep -E "^bind-key[[:space:]]+(-r[[:space:]]+)?-T[[:space:]]+prefix[[:space:]]+$1[[:space:]]" \
     | tail -1
 }
 
