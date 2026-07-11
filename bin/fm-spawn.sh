@@ -56,7 +56,11 @@
 #   Before a secondmate launch, the home is locally fast-forwarded to the primary
 #   default-branch commit when safe; skipped syncs warn and launch unchanged.
 #   Ship/scout spawns refuse to launch unless the resolved task path is a real
-#   git worktree root distinct from the primary project checkout.
+#   git worktree root distinct from the primary project checkout, and unless the
+#   brief passes bin/fm-brief-lint.sh (a missing brief, an unreplaced {TASK}, or a
+#   status-append target that is not the exact absolute state/<id>.status path is a
+#   hard failure that aborts the launch). Secondmate launch prompts are charters and
+#   are not linted.
 # Batch dispatch: pass one or more `id=repo` pairs instead of a single <id> <project>, e.g.
 #     fm-spawn.sh fix-a-k3=projects/foo add-b-q7=projects/bar [--scout]
 #   Each pair re-execs this script in single-task mode, so the single path stays the only
