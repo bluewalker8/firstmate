@@ -39,6 +39,11 @@
 # declared-external-wait verb (FM_CLASSIFY_PAUSED_VERB, default "paused") from
 # "blocked:": pause for a known external wait expected to clear on its own,
 # blocked when firstmate must act.
+# Ship and scout scaffolds also carry a discussion-channel contract: context a
+# one-line status cannot hold goes to data/<task-id>/discussion.md under a
+# "## question <n>" heading, reported with "needs-decision: see discussion" (or
+# "blocked: see discussion"); firstmate answers under "## answer <n>". The file
+# is append-only and survives teardown.
 # Ship tasks include a project-memory section so durable project-intrinsic
 # learnings can be committed to AGENTS.md through the project's delivery path;
 # it carries the AGENTS.md authoring bar (widely useful knowledge only, pointers
