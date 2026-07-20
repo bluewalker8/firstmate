@@ -52,8 +52,9 @@ make_fake_root() {
   ln -s "$ROOT/bin/fm-backend.sh" "$fake/bin/fm-backend.sh"
   ln -s "$ROOT/bin/backends/tmux.sh" "$fake/bin/backends/tmux.sh"
   ln -s "$ROOT/bin/fm-tmux-lib.sh" "$fake/bin/fm-tmux-lib.sh"
-  # fm-composer-lib.sh: fm-tmux-lib.sh sources it unconditionally; missing it
-  # here fails the fake root's kill dispatch under set -e.
+  # fm-composer-lib.sh: symlink the REAL file (fm-tmux-lib.sh sources it as a
+  # sibling for shared composer/ghost classification; a missing sibling would
+  # abort the set -e teardown when the tmux backend is sourced for the kill).
   ln -s "$ROOT/bin/fm-composer-lib.sh" "$fake/bin/fm-composer-lib.sh"
   # fm-wake-lib.sh: symlink the REAL file (teardown sources it for fm_path_mtime,
   # used by the stale worktree git-lock cleanup; unchanged by this fixture).
