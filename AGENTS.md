@@ -90,6 +90,7 @@ data/                personal fleet records; LOCAL, gitignored as a whole
   secondmates.md      secondmate routing table; firstmate-private, maintained by fm-home-seed.sh (section 6)
   <id>/brief.md      per-task crewmate brief, or per-secondmate charter brief when kind=secondmate
   <id>/report.md     scout task deliverable, written by the crewmate; survives teardown
+  <id>/discussion.md per-task discussion channel for full-context needs-decision/blocked forks (section 11); append-only, survives teardown
 projects/            cloned repos; gitignored; READ-ONLY for you
 state/               volatile runtime signals; gitignored
   <id>.status        appended by crewmates: "<state>: <note>" wake-event lines, not current-state truth
@@ -584,6 +585,7 @@ On wake, in order of cheapness:
 1. Read the reason line and drain queued wake records with `bin/fm-wake-drain.sh`.
 2. `signal:` read the listed status files first; a wake lists every signal that landed within the coalescing grace window (e.g. a status write plus the same turn's turn-end marker), and each is ~30 tokens and usually sufficient.
    A status line is the wake *event*, not the crewmate's current state; when you need the live state - especially to confirm a `needs-decision`/`blocked`/`paused` status is still real and not already resolved-and-resumed - read it with `bin/fm-crew-state.sh <id>`, which reconciles the authoritative run-step over the possibly-stale log line, and never `tail` the status log as the current-state source.
+   A `needs-decision:`/`blocked: see discussion` status means the crewmate appended full context to `data/<id>/discussion.md` instead of compressing it into the status line: read that file in full and answer under a `## answer <n>` heading, then steer it back with `answered in discussion - continue`.
 3. `stale:` the crewmate stopped without reporting; peek the pane (`bin/fm-peek.sh <window>`) to diagnose.
    If the stale reason includes `demand-deep-inspection`, inspect the pane, `bin/fm-crew-state.sh <id>`, and the validation logs before resuming supervision.
    If the pane is waiting, looping, confused, or unresponsive, load `stuck-crewmate-recovery`.
@@ -741,6 +743,9 @@ Keep the charter focused on persistent responsibility, available project clones,
 Preserve the requests-from-main-firstmate contract in the charter: marked requests return via status or a doc pointer, while unmarked direct captain messages stay conversational.
 Before seeding, launching, recovering, or handing backlog to a secondmate home, load `secondmate-provisioning`.
 The status-reporting protocol is intentionally sparse: crewmates append status only for supervisor-actionable phase changes or `needs-decision`/`blocked`/`paused`/`done`/`failed`, because every append wakes firstmate.
+Ship and scout briefs also carry a discussion-channel contract for context a one-line status cannot hold: when a crewmate hits a fork, ambiguity, or finding it cannot state faithfully in one line, it appends a `## question <n>` entry to its own `data/<id>/discussion.md` with the situation, the options it sees, and its recommendation, then reports `needs-decision: see discussion` (or `blocked: see discussion`) on the status line.
+Firstmate answers under `## answer <n>` in that same file and steers back with one status-line-length line, `answered in discussion - continue`.
+The file is append-only, lives beside the brief under the task's own `data/<id>/`, and survives teardown, so multiple rounds of dialogue are fine.
 For any generated brief that still contains `{TASK}`, replace it with a clear task description, acceptance criteria, and any constraints or context the crewmate needs before spawning or seeding.
 Adjust the other sections only when the task genuinely deviates from the standard ship-a-new-PR shape (e.g. fixing an existing external PR); the scaffold is the contract, not a suggestion.
 
