@@ -55,6 +55,12 @@ Use the current tmux session name when firstmate was launched inside tmux; use `
 Typing directly into an attached window is authoritative direct intervention - the first mate treats it the same as any other captain instruction and reconciles at the next heartbeat.
 You do not need to attach at all for routine supervision: from an active firstmate session, the first mate reads crew windows itself with `bin/fm-peek.sh fm-<id>` (a bounded, read-only capture) and steers a crew with `FM_HOME=<this-firstmate-home> bin/fm-send.sh fm-<id> "<text>"` unless `FM_HOME` is already set to the active firstmate home.
 
+## The fleet board
+
+For a whole-fleet glance without hunting through windows, press `prefix+F` (or `prefix+B` if `prefix+F` is already taken) to pop up the visual fleet board: one progress-bar line per in-flight task, grouped by project, hidden until you press the key.
+`bin/fm-board-bind.sh` installs this binding on the current tmux server, and session start re-runs it best-effort so it survives restarts without any action from you; it never edits `~/.tmux.conf`, but prints the equivalent line so you can make it permanent.
+The board is read-only and reads live state straight off disk, so a task appears the moment it is spawned and disappears when it lands.
+
 ## Verifying it works
 
 Ask the first mate for any small piece of work, or spawn a trivial scout task, and confirm a new window shows up:

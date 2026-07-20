@@ -593,4 +593,18 @@ if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ]; then
   x_mode_setup
   fleet_sync
 fi
+# Best-effort fleet-board keybind: a tmux-server-only mutation, not fleet
+# state, so it does not need the fleet lock the four MUTATING sweeps above
+# gate on - but it still skips under detect-only, matching that mode's
+# read-only contract for everything else in this script. fm-board-bind.sh
+# itself is silent when already bound and skips when not inside tmux; its
+# other diagnostic lines all go to stderr, not stdout. No 2>&1 here: this
+# script's own "silent when all good" contract is stdout-only (tests/
+# fm-bootstrap.test.sh captures bare stdout), and bin/fm-session-start.sh
+# already folds this script's stderr into the captain-facing digest one
+# layer up, so a fold here would only double it while corrupting the
+# stdout-only contract this script is tested against.
+if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ]; then
+  "$SCRIPT_DIR/fm-board-bind.sh" || true
+fi
 exit 0
