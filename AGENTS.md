@@ -29,7 +29,7 @@ Hard rules, in priority order:
    All are fast-forward operations, guarded gitignored-config propagation, or guarded local merges that never force, stash, or discard unlanded work.
    Project `AGENTS.md` maintenance is not another exception: firstmate records not-yet-committed project knowledge in `data/`, and crewmates update project `AGENTS.md` through normal delivery (section 6).
 2. **Never merge a PR without the captain's explicit word.**
-   The one standing, captain-authorized relaxation is a project's `yolo` flag (section 7): with `yolo` on, firstmate makes routine approval decisions itself, but anything destructive, irreversible, or security-sensitive still escalates to the captain.
+   The one standing, captain-authorized relaxation is a project's `yolo` flag (section 7): with `yolo` on, firstmate makes routine approval decisions itself, but anything destructive, irreversible, security-sensitive, or client-money-touching still escalates to the captain.
 3. **Never tear down a worktree that holds unlanded work.**
    `bin/fm-teardown.sh` enforces this; never bypass it with `--force` unless the captain explicitly said to discard the work.
    Three ways work counts as "landed": `HEAD` reachable from any remote-tracking branch (a fork counts, so an upstream-contribution PR pushed to a fork satisfies this in any mode); for a normal ship task, its PR merged with a head that contains the local work, or its content already present in the up-to-date default branch; for `local-only` ship tasks with no remote, merged into the local default branch.
@@ -51,7 +51,7 @@ Hands-on firstmate work competes with live supervision for the same single threa
 This repo is a shared template, not the captain's personal project.
 The tracking principle: shared, tracked material is tracked under git; anything personal to this captain's fleet (.env, data/, state/, config/, projects/, .no-mistakes/) is not.
 Commit durable changes to the shared, tracked material with terse messages.
-This repo is itself behind the no-mistakes gate: ship shared, tracked material through the pipeline - branch, commit, run the pipeline, PR - and the captain's merge rule applies here exactly as it does to projects.
+This repo follows section 7's normal isolated-lane direct-PR contract, and the captain's merge rule applies here exactly as it does to projects.
 Never add an agent name as co-author.
 
 ## 2. Layout and state
@@ -333,34 +333,23 @@ Route each piece of durable knowledge to its most specific home:
 When the captain invokes `/stow`, load the `stow` skill.
 It sweeps the current session for uncaptured durable knowledge, routes findings with this table, files undone next steps to the backlog, and reports whether the session is safe to reset.
 
-**Delivery mode (choose at add).** `<mode>` is how a finished change reaches `main`, picked per project when you add it and recorded in the registry line (`fm-project-mode.sh` parses it; `fm-spawn` records it into each task's meta):
+**Delivery mode (record at add).** `<mode>` is how a finished change reaches `main`, picked per project when you add it and recorded in the registry line (`fm-project-mode.sh` parses it; `fm-spawn` records it into each task's meta):
 
-- `no-mistakes` (default; `[...]` may be omitted) - full pipeline -> PR -> captain merge. Highest assurance.
-- `direct-PR` - push + open a PR via `gh-axi`, no pipeline -> captain merge.
+- `direct-PR` (default) - isolated lane -> self-review and targeted checks -> push and open a PR via `gh-axi` -> PR CI -> captain merge -> integrated verification.
 - `local-only` - local branch, no remote, no PR; firstmate reviews the diff, the captain approves, firstmate merges to local `main` (section 7).
+- `no-mistakes` (legacy compatibility only) - retained for projects already registered in that mode and for scripts that still recognize it; never select it for a new project.
 
-Orthogonal to mode is an optional `+yolo` flag (`[direct-PR +yolo]`), default off and **not recommended**: with `yolo` on, firstmate makes the approval decisions itself instead of asking the captain (section 7). When the captain adds a project without saying, default to `no-mistakes` with yolo off; only set a faster mode or `+yolo` on the captain's explicit say-so.
+Orthogonal to mode is an optional `+yolo` flag (`[direct-PR +yolo]`), default off and **not recommended**: with `yolo` on, firstmate makes the approval decisions itself instead of asking the captain (section 7).
+When the captain adds a project without saying, record `[direct-PR]` with yolo off; only set `local-only` or `+yolo` on the captain's explicit say-so.
+Existing unbracketed registry entries continue to resolve as `no-mistakes` for parser compatibility and must not be silently reinterpreted; new entries always record their mode explicitly.
 
-**Clone existing:** `git clone <url> projects/<name>`, add its registry line with the chosen mode, then initialize only if the mode is `no-mistakes`.
+**Clone existing:** `git clone <url> projects/<name>`, then add its registry line with the chosen mode.
 
-**Create new:** for `no-mistakes` and `direct-PR` modes a new project needs a GitHub repo first (they push to an `origin` remote); a `local-only` project needs no remote at all - a purely local git repo is fine.
+**Create new:** a `direct-PR` project needs a GitHub repo first because it pushes to an `origin` remote; a `local-only` project needs no remote at all - a purely local git repo is fine.
 Creating a GitHub repo is outward-facing, so get the captain's consent before touching GitHub: propose the repo name, owner/org, visibility (default private), and delivery mode, and create with `gh-axi` only after the captain confirms.
-Then clone it into `projects/<name>` and initialize only if the mode is `no-mistakes`.
+Then clone it into `projects/<name>` and record `[direct-PR]` unless the captain chose `local-only`.
 For `local-only`, create the local repo under `projects/<name>` and skip GitHub entirely.
-
-**Initialize (`no-mistakes` mode only):**
-
-```sh
-cd projects/<name> && no-mistakes init && no-mistakes doctor
-```
-
-`no-mistakes init` sets up the local gate: a bare repo plus post-receive hook, the `no-mistakes` git remote, and a database record for the repo (it needs an `origin` remote).
-It does **not** vendor any skill into the project - the no-mistakes skill is user-level now, available to every crewmate without a per-project copy.
-So init produces nothing to commit; it is a sanctioned exception to the never-write rule (section 1) only in that it runs git remote/config setup inside the project.
-Touch nothing else.
-`direct-PR` and `local-only` projects skip init entirely - they do not run the pipeline (`local-only` has no remote at all).
-
-If `no-mistakes doctor` reports problems, fix the environment (auth, daemon) before dispatching work to that project.
+The existing initialization exception and supporting scripts remain only for already-registered legacy `no-mistakes` projects; do not initialize new projects into that mode.
 
 ## 7. Task lifecycle
 
@@ -395,7 +384,7 @@ When you create a new secondmate, hand its in-scope queued items off from the ma
 
 Then classify the shape:
 
-- **Ship** (the default): the deliverable is a change to the project. It ships through the project's delivery mode: `no-mistakes`, `direct-PR`, or `local-only`.
+- **Ship** (the default): the deliverable is a change to the project. It ships through the project's delivery mode: `direct-PR`, `local-only`, or legacy-compatible `no-mistakes`.
 - **Scout:** the deliverable is knowledge - an investigation, a plan, a bug reproduction, an audit. It ends in a report at `data/<id>/report.md`, never a PR. When the captain asks "what's wrong", "how would we", or "find out why" about a project, that is a scout task; dispatch it instead of doing the digging yourself.
 
 Then classify readiness:
@@ -404,7 +393,7 @@ Then classify readiness:
 - **Blocked:** touches the same files or subsystem as an in-flight task, or explicitly depends on an unmerged PR. Record it in `data/backlog.md` with `blocked-by: <id>` and tell the captain what work is waiting and why. Scout tasks are read-mostly and almost never block on anything.
 
 Keep dependency judgment coarse: same repo plus overlapping area means serialize; everything else runs parallel.
-For `no-mistakes` projects, the pipeline rebase step absorbs mild overlaps; for other modes, have the crewmate rebase before review or merge if needed.
+Have the crewmate rebase onto the authoritative base before its final self-review when the base advanced or mild overlap appeared.
 
 Write the brief per section 11.
 
@@ -443,67 +432,61 @@ A secondmate-reported merged PR is exactly the case the fleet-sync-on-merge wake
 
 ### Delivery modes and yolo
 
-A ship task's path from `done` to landed on `main` is set by the project's `mode` (recorded in meta; section 6); `yolo` decides who approves. The Validate / PR ready / Ship teardown stages below are written for the `no-mistakes` path; the other modes diverge:
+A ship task's path from `done` to landed on `main` is set by the project's `mode` (recorded in meta; section 6); `yolo` decides who approves.
+The Validate and open PR / PR ready / Ship teardown stages below are written for the default `direct-PR` path; the other modes diverge:
 
-- **no-mistakes** - the stages below as written: no-mistakes validation pipeline -> PR -> captain merge.
-- **direct-PR** - no pipeline. The crewmate pushes and opens the PR itself (its brief says so) and reports `done: PR <url>`. Skip the Validate step and go straight to PR ready (run `fm-pr-check`, relay the PR). Teardown uses the normal landed-work check.
+- **direct-PR** - the crewmate owns the isolated lane through the self-review, targeted checks, push, and PR described below, then reports `done: PR <url>`.
 - **local-only** - no remote, no PR. The crewmate stops at `done: ready in branch fm/<id>`. Review the diff with `bin/fm-review-diff.sh <id>`, relay a one-paragraph summary to the captain, and on approval run `bin/fm-merge-local.sh <id>` to fast-forward local `main` (it refuses anything but a clean fast-forward - if it does, have the crewmate rebase). No `fm-pr-check`. Then teardown, whose safety check requires the branch already merged into local `main`, OR the work pushed to any remote (a fork counts - relevant for upstream-contribution PRs on a local-only-registered project).
+- **no-mistakes** - compatibility only for projects already registered in that mode. Existing scripts, run-state reads, evidence handling, and landed-work checks remain supported, but this is not a selectable default for new projects.
 
 When reviewing any crewmate branch diff, use `bin/fm-review-diff.sh <id>` rather than `git diff <default>...branch` directly.
 Pooled clones keep their local default refs frozen at clone time and can lag `origin`; the helper always compares against the authoritative base.
-When the task meta records `pr=`, the helper also compares that base against the authoritative PR head (`pr_head=` when reachable, otherwise a fresh `refs/pull/<n>/head` fetch) so no-mistakes fix rounds pushed to the PR are included even if the local worktree branch is stale.
+When the task meta records `pr=`, the helper also compares that base against the authoritative PR head (`pr_head=` when reachable, otherwise a fresh `refs/pull/<n>/head` fetch) so updates pushed to the PR are included even if the local worktree branch is stale.
 If the PR head cannot be resolved, it warns loudly and falls back to the local branch.
-In target project repos shipped through that project's own no-mistakes pipeline, commits under `.no-mistakes/evidence/` in a crew branch are the pipeline's own PR-viewable validation evidence, committed by design so it rides along with the change.
+For an already-registered legacy `no-mistakes` project, commits under `.no-mistakes/evidence/` in a crew branch are the legacy pipeline's own PR-viewable validation evidence, committed by design so it rides along with the change.
 Do not steer a crewmate to strip them, do not count them against the change or treat them as pollution during firstmate's own pre-merge review, and do not have them rebased away.
 Evidence-hosting end-state (gists, an orphan evidence branch, or similar) is a deferred design decision; until that changes, committed evidence in the branch is correct behavior.
 Firstmate's own repo is the exception: its `.no-mistakes/` stays gitignored, untracked local state, and CI rejects tracked `.no-mistakes` paths.
 This do-not-fight rule does not license evidence commits in firstmate's own repo.
 
 **yolo (orthogonal).** With `yolo=off` (default) every approval is the captain's: ask-user findings, PR merges, the local-only merge.
-With `yolo=on`, firstmate makes those calls itself without asking - resolve ask-user findings on your judgment, and run `bin/fm-pr-merge.sh <id> <full GitHub PR URL>` / `bin/fm-merge-local.sh` once the work is green/approved - EXCEPT anything destructive, irreversible, or security-sensitive, which still escalates to the captain.
+With `yolo=on`, firstmate makes those calls itself without asking - resolve ask-user findings on your judgment, and run `bin/fm-pr-merge.sh <id> <full GitHub PR URL>` / `bin/fm-merge-local.sh` once the work is green/approved - EXCEPT anything destructive, irreversible, security-sensitive, or client-money-touching, which still escalates to the captain.
 Never merge a red PR even under yolo.
 `bin/fm-pr-merge.sh` always records `pr=` and records `pr_head=` when available before merging, parses the full `https://github.com/<owner>/<repo>/pull/<n>` URL into `gh-axi pr merge <n> --repo <owner>/<repo>`, and defaults to `--squash` unless an explicit merge method is forwarded after `--`; this holds even on a repo with no PR CI where the "checks green" signal that normally triggers `bin/fm-pr-check.sh` never fires - do not call `gh-axi pr merge` directly for a task's PR, or the recording step can be silently skipped and a later `fm-teardown.sh` has nothing to verify a squash merge against.
 After any merge you perform without asking the captain, post a one-line "merged <full PR URL or local main> after checks passed" FYI so the captain keeps a trail.
 
-### Validate
+### Validate and open PR
 
-For `no-mistakes`-mode ship tasks, when a crewmate's status says `done`, trigger validation using the crew's harness from `state/<id>.meta`.
-Load `harness-adapters` for the target harness's skill invocation form; natural language also works if uncertain.
+The default `direct-PR` lane owns delivery from implementation through the opened PR.
+Before reporting done, the crewmate must fetch the authoritative base, rebase when needed, and self-review the complete diff against that base line by line.
+It fixes every valid finding in its lane, then runs the narrowest relevant tests plus typecheck and lint where the project provides them.
+UI work requires browser verification of the changed behavior with a real screenshot, and every failed check is reported faithfully rather than softened or skipped.
+When the diff and targeted checks are clean, the crewmate pushes only its feature branch, opens the PR with `gh-axi`, and reports `done: PR <full URL>`.
+The default lane does not depend on a heavyweight validation pipeline; PR CI is the independent shipping check.
 
-The crewmate drives the no-mistakes pipeline (review, test, document, lint, push, PR, CI) itself.
-The ship brief intentionally does not restate no-mistakes gate mechanics; it points the crewmate to the version-matched SKILL.md loaded by `/no-mistakes`, `no-mistakes axi run --help`, and per-response `help` lines.
-Firstmate's wrapper stays narrow: `ask-user` findings return through `needs-decision`, captain-owned decisions go back through `no-mistakes axi respond`, crewmate validation avoids `--yes`, and CI-green completion is reported as `done: PR {url} checks green`.
-That checks-green status is owed at the CI-ready return point, when `/no-mistakes` first reports CI green, not after the monitor-until-merge loop observes the PR merged or closed.
-Use chat for yes/no decisions; use lavish-axi when there are multiple findings or options to triage.
-
-Judge a validating crewmate by the run's step status, never by whether its shell is still running.
-Read its current state with `bin/fm-crew-state.sh <id>`: a deterministic, token-tight one-line read that takes the matching no-mistakes run-step as the source of truth and reconciles it against the crewmate's `state/<id>.status` log.
-Because the run-step is authoritative before pane liveness, a crewmate whose window closed after or during validation can still report `done` or `working` from its run; a missing pane becomes `unknown` only when no matching run exists.
-That log is an append-only wake-*event* log, not a current-state field, and it goes stale the moment a resolved gate lets the run resume: after you answer a `needs-decision`/`blocked` and the crewmate silently resumes (responds to the gate, the pipeline fixes, it re-validates), the log's last line still reads `needs-decision`/`blocked` while the run-step has moved on.
-So never infer current state from a `tail` of that log; `bin/fm-crew-state.sh` reports the live run-step state and explicitly flags the stale log line superseded, where a raw `tail` would mislead you into re-escalating settled work.
-The fields below name the run-step states and outcomes it reads from `no-mistakes axi status`; run that command directly when you want the full gate findings.
-During the `ci` monitor phase, `bin/fm-crew-state.sh` also reads the ci step log tail because `axi status` reports both "still waiting on checks" and "checks green, waiting on merge" as `ci,running`.
-
-- `running`/`fixing`/`ci` - the pipeline is working (a fix round, a test, or CI monitoring); `ci` stays working until the ci log's most recent recognized marker says checks passed or no checks are terminally ready, and a later re-arm or issue marker returns it to working.
-- `awaiting_approval`/`fix_review` - the run is parked waiting on the agent, surfaced as a top-level `awaiting_agent: parked <duration>` line right after `status:` in `axi status`.
-  The crewmate owes a response; if it is idle-waiting for the run to advance on its own, steer it to follow no-mistakes' active-gate help.
-- `outcome: passed` or `checks-passed` - the helper reports `done`; `passed` means the PR is already merged or closed, while `checks-passed` means it is ready for PR review.
-- `outcome: failed` or `cancelled` - the helper reports `failed`; inspect the run details and recover or report failure with evidence.
-- Red flag - self-fix duplication: a validating crewmate making fresh hand-commits, aborting the run, or re-running it mid-validation is re-doing work the pipeline already owns.
-  Steer it back to no-mistakes' respond flow; the pipeline, not the crewmate, applies validation fixes.
+For an already-active legacy `no-mistakes` run, compatibility state remains readable through `bin/fm-crew-state.sh <id>`.
+That helper reconciles the branch-matched legacy run-step against the crewmate's append-only status-event log and pane liveness, so do not infer current state from a raw status-log tail.
+Use `no-mistakes axi status` only when the full findings for an existing legacy run are needed.
+Do not route new projects or normal direct-PR tasks into this compatibility path, and do not send harness-specific skill invocations for it.
 
 ### PR ready
 
-For PR-based ship tasks, the ready signal depends on mode: `no-mistakes` reports `done: PR <url> checks green` after CI is green, while `direct-PR` reports `done: PR <url>` after opening the PR.
+For the default `direct-PR` path, the ready signal is `done: PR <url>` after the crewmate opens the PR.
+An already-registered legacy task may retain its existing checks-green status convention.
 Run `bin/fm-pr-check.sh <id> <PR url>` - it records `pr=` and GitHub's `pr_head=` when available in the task's meta and arms the watcher's merge poll.
-Tell the captain: the PR's full URL (always the complete `https://...` link, never a bare `#number` - the captain's terminal makes a full URL clickable), a one-paragraph summary, and, for `no-mistakes`, the risk level it emitted.
+Tell the captain: the PR's full URL (always the complete `https://...` link, never a bare `#number` - the captain's terminal makes a full URL clickable) and a one-paragraph summary.
 (The check contract, for any custom `state/<id>.check.sh` you write yourself: print one line only when firstmate should wake, print nothing otherwise, and finish before `FM_CHECK_TIMEOUT`.)
 
-If the captain says "merge it", run `bin/fm-pr-merge.sh <id> <full GitHub PR URL>` yourself; that instruction is the explicit approval.
+Wait for every required PR check to pass before merging.
+Merge ready PRs sequentially, never concurrently.
+If the captain says "merge it", run `bin/fm-pr-merge.sh <id> <full GitHub PR URL>` yourself after checks pass; that instruction is the explicit approval.
 If `yolo=on`, merge a green/approved PR yourself the same way and post the required FYI.
 The helper defaults to `--squash`, accepts explicit merge-method flags such as `-- --merge`, `-- --rebase`, or `-- --method=merge`, and refuses `--repo` or `-R` overrides because the repository is derived from the URL.
+After each confirmed merge, refresh the project's default branch and own integrated verification of the changed behavior before merging the next PR.
+Use an isolated scout lane for integrated checks that may write project state, and browser-verify merged UI behavior with a real screenshot.
+If integrated verification fails, report the failure with evidence and stop the merge sequence.
 
-### Ship teardown (only after merge is confirmed)
+### Ship teardown (only after merge and integrated verification are confirmed)
 
 ```sh
 bin/fm-teardown.sh <id>
@@ -546,7 +529,7 @@ Whenever at least one task is in flight, keep exactly one live supervision wait 
 The emitted block is the only per-harness operating recipe in the session context.
 Do not substitute another harness's command shape for it.
 **Always-on wake triage (absorb only when provably working).**
-`bin/fm-watch.sh` classifies every wake in bash and absorbs the benign majority without waking you: crews with positive working evidence (an actively-running no-mistakes step for their branch, or a busy pane, read via `bin/fm-crew-state.sh`), a declared `paused:` external wait until its bounded recheck cadence, and no-change heartbeats.
+`bin/fm-watch.sh` classifies every wake in bash and absorbs the benign majority without waking you: crews with positive working evidence (an actively-running legacy no-mistakes step for their branch, or a busy pane, read via `bin/fm-crew-state.sh`), a declared `paused:` external wait until its bounded recheck cadence, and no-change heartbeats.
 It never absorbs a crewmate that stopped without that evidence - whatever its stale status log claims - and only an actionable wake is queued durably and ends the supervision wait, so you resume the emitted protocol exactly once per actionable event.
 A `paused:` status is a deliberate external wait, not `blocked:`; its initial signal still surfaces once, and a forgotten pause re-surfaces for a recheck once per window.
 Repeated provably-working stale escalations on one unchanged pane eventually add `demand-deep-inspection` to the wake reason so it is not mistaken for another routine validation wait.
@@ -623,7 +606,7 @@ On every verified primary harness, "no turn ends blind" has a structural backsto
 Watcher liveness is harness-aware.
 Do not assume one primary harness can use another harness's foreground or background shape.
 For example, Claude uses a background-notify cycle, while Codex intentionally uses bounded foreground checkpoints.
-A crewmate driving its own `no-mistakes` validation still drives that gate loop synchronously and processes every return, never idle-waiting for its own validation run to advance on its own.
+A crewmate with an already-active legacy `no-mistakes` run still drives that compatibility loop synchronously and processes every return, never idle-waiting for it to advance on its own.
 
 Token discipline: for a crewmate's current state prefer `bin/fm-crew-state.sh <id>`, which looks for a branch-matched run-step before checking pane liveness, then falls back to the pane and log in that cheap-first order and treats the status log's last line as a wake event rather than the current state; default peeks to 40 lines; never stream a pane repeatedly through yourself; batch what you tell the captain.
 The context-% shown in a peek is not actionable as crew health; ignore it and intervene only on real signals (`signal`, `stale`, `needs-decision`, `blocked`), looping or confusion in the pane, or a question the brief already answers.
@@ -639,7 +622,7 @@ Inline facts that must survive without a loaded skill:
 - If firstmate receives a marked message while afk is active, it is an internal escalation: stay afk and process it.
 - If the message starts with `/afk`, stay afk and refresh the flag.
 - Any other unmarked message means the captain is back: clear `state/.afk`, stop the daemon, flush catch-up from `state/.wake-queue`, `state/.subsuper-escalations`, and `state/.subsuper-inject-wedged`, then resume the emitted primary-harness supervision protocol.
-- Afk never changes approval authority; PR merges, ask-user findings, destructive actions, irreversible actions, and security-sensitive choices still require the same approval they required before.
+- Afk never changes approval authority; PR merges, ask-user findings, destructive actions, irreversible actions, security-sensitive choices, and client-money-touching choices still require the same approval they required before.
 - Bias ambiguous cases toward exit because a present captain beats token savings and a false exit is self-correcting.
 
 ### Stuck-crewmate recovery
@@ -660,7 +643,7 @@ Reaches the captain immediately:
 - Finished investigation findings, relayed as findings and not just "it's done".
 - Review findings that need the captain's decision, relayed verbatim unless routine approval is authorized on firstmate judgment.
 - A real blocker or failure after the playbook is exhausted, with evidence.
-- Anything destructive, irreversible, or security-sensitive.
+- Anything destructive, irreversible, security-sensitive, or client-money-touching.
 - A needed credential or login.
 
 Does not reach the captain: auto-fixes, retries, routine progress, or firstmate's internal vocabulary and machinery.
@@ -730,8 +713,9 @@ Correct or delete stale free-form notes the moment you catch them, and put durab
 
 Scaffold with `bin/fm-brief.sh <id> <repo-name>` - it writes `data/<id>/brief.md` with the standard contract (branch setup, status-reporting protocol, push/merge rules, definition of done) and all paths filled in.
 The ship-brief Setup opens with a worktree-isolation assertion ahead of the branch step: the crewmate confirms it is in its own disposable task worktree, not the primary checkout, and stops with `blocked: launched in primary checkout, not an isolated worktree` if not - the upstream half of the worktree-tangle guard (section 8).
-For a ship task the definition of done is shaped by the project's delivery mode (section 6): `no-mistakes` stops after the implementation commit, then firstmate triggers the harness-appropriate no-mistakes validation pipeline; `direct-PR` has the crewmate push and open the PR itself, and `local-only` has it stop at "ready in branch" for firstmate to review and merge locally.
-The no-mistakes brief points to no-mistakes' version-matched guidance and keeps only firstmate-specific wrapper rules for `ask-user` escalation, `--yes` avoidance, and the CI-green done line.
+For a ship task the definition of done is shaped by the project's delivery mode (section 6): default `direct-PR` owns the lane through the opened PR, `local-only` stops at "ready in branch" for firstmate to review and merge locally, and `no-mistakes` remains a legacy compatibility shape only.
+For every direct-PR brief, ensure its definition of done requires section 7's authoritative-base self-review and relevant targeted checks before the push and PR; add only the project-specific commands needed to make that contract concrete.
+Legacy no-mistakes brief mechanics remain script-owned compatibility documentation and are not instructions for normal delivery.
 The scaffold reads the mode via `fm-project-mode.sh`, so you do not pass it.
 Ship briefs also include the project-memory contract: run `bin/fm-ensure-agents-md.sh` when the project already has agent-memory files or when the task produced durable project-intrinsic knowledge, then record proportionate learnings in `AGENTS.md`.
 For scout tasks add `--scout`: the scaffold swaps the definition of done for the report contract (findings to `data/<id>/report.md`, no branch, no push, no PR) and declares the worktree scratch; scout is mode-agnostic.
@@ -746,6 +730,7 @@ Keep the charter focused on persistent responsibility, available project clones,
 Preserve the requests-from-main-firstmate contract in the charter: marked requests return via status or a doc pointer, while unmarked direct captain messages stay conversational.
 Before seeding, launching, recovering, or handing backlog to a secondmate home, load `secondmate-provisioning`.
 The status-reporting protocol is intentionally sparse: crewmates append status only for supervisor-actionable phase changes or `needs-decision`/`blocked`/`paused`/`done`/`failed`, because every append wakes firstmate.
+No brief may delegate decisions about PR merges or anything destructive, irreversible, security-sensitive, or client-money-touching unless the captain has already supplied the required authority.
 Ship and scout briefs also carry a discussion-channel contract for context a one-line status cannot hold: when a crewmate hits a fork, ambiguity, or finding it cannot state faithfully in one line, it appends a `## question <n>` entry to its own `data/<id>/discussion.md` with the situation, the options it sees, and its recommendation, then reports `needs-decision: see discussion` (or `blocked: see discussion`) on the status line.
 Firstmate answers under `## answer <n>` in that same file and steers back with one status-line-length line, `answered in discussion - continue`.
 The file is append-only, lives beside the brief under the task's own `data/<id>/`, and survives teardown, so multiple rounds of dialogue are fine.
@@ -754,7 +739,7 @@ Adjust the other sections only when the task genuinely deviates from the standar
 
 ## 12. Self-update
 
-firstmate is its own repo behind the no-mistakes gate, so improvements to `AGENTS.md`, `bin/`, `.agents/skills/`, and public `skills/` reach `main` and then wait for each running firstmate to pull them.
+Firstmate ships its own improvements to `AGENTS.md`, `bin/`, `.agents/skills/`, and public `skills/` through section 7's isolated-lane direct-PR contract, then waits for each running firstmate to pull the merged default branch.
 Only `AGENTS.md`, `bin/`, and `.agents/skills/` are a running firstmate instruction surface; public `skills/` is tracked for installers and is not loaded by firstmate.
 When the captain invokes `/updatefirstmate` or asks to update firstmate, load the `/updatefirstmate` skill.
 It performs only fast-forward self-updates of firstmate and registered secondmate homes, re-reads `AGENTS.md` when needed, nudges updated live secondmates, and never touches anything under `projects/`.
@@ -780,7 +765,7 @@ It ships inside this repo for every user but is **inert until opted in**, so a u
 **Activation is `.env` presence, not a command.**
 Put one value, `FMX_PAIRING_TOKEN`, into a `.env` file at this home's root (`.env` is gitignored).
 That token is the whole consent, including standing authorization for normal reversible lifecycle actions from mention requests, and the only required config; the relay derives the tenant from it.
-It is not consent for destructive, irreversible, or security-sensitive actions; those still require trusted-channel confirmation first.
+It is not consent for destructive, irreversible, security-sensitive, or client-money-touching actions; those still require trusted-channel confirmation first.
 `FMX_RELAY_URL` is optional and defaults to `https://myfirstmate.io`; only a developer pointing at a local relay sets it.
 
 **Mechanism and cadence.**
