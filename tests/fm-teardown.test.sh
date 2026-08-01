@@ -677,7 +677,8 @@ test_no_pr_recorded_discovers_merged_pr_by_branch_allows() {
   # Reproduces the real false-refusal report exactly, with NO pr=/pr_head=
   # recorded in meta at all (fm-pr-check.sh was never run, e.g. a yolo merge on
   # a repo with no PR CI so the "checks green" trigger that fires it never
-  # happened): a branch with a commit, a no-mistakes auto-fix commit pushed on
+  # happened): a legacy branch with a commit and a historical auto-fix commit
+  # pushed on
   # top that never made it back into the local worktree, a squash merge onto
   # main under a brand-new SHA, and the head branch deleted (simulated here by
   # never pushing fm/task-x1 at all, so no refs/remotes/origin/fm/task-x1

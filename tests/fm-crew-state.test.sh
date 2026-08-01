@@ -4,11 +4,10 @@
 #
 # The status file (state/<id>.status) is a best-effort append-only EVENT LOG, so
 # `tail -1` of it reports the last event, not the current state. fm-crew-state
-# reads the AUTHORITATIVE source (a matching no-mistakes run-step, else the
-# pane busy-signature) and reconciles the possibly-stale log against it. These
-# cases pin every branch of that logic, hermetically, over real throwaway git
-# repos with a fake `no-mistakes` (run-step source) and a fake `tmux` (pane
-# source):
+# reads the authoritative source and reconciles the possibly-stale log against
+# it. Historical mode fixtures exercise the bounded read-only compatibility
+# path over throwaway repos with a fake `no-mistakes`; current delivery fixtures
+# prove direct-PR skips that binary. A fake `tmux` supplies the pane source.
 #   (a) active run-step is authoritative                          -> run-step
 #   (b) needs-decision/blocked log + resumed run = SUPERSEDED     -> run-step
 #   (c) genuine parked run + needs-decision log = NOT superseded  -> run-step
@@ -806,8 +805,8 @@ test_no_run_herdr_unknown_uses_backend_capture() {
 # Regression: herdr's agent.get reports generation state ("working" only while
 # the model is actively streaming a turn - docs/herdr-backend.md "Busy state"),
 # not "this crew's tool call is still in progress". A crew blocked on its own
-# long-running foreground `no-mistakes axi run` (no --yes; blocks until a gate
-# or outcome) is not generating for that whole span, so agent.get can read
+# long-running foreground tool call is not generating for that whole span, so
+# agent.get can read
 # idle while the pane's own rendered text still shows the busy banner
 # (BUSY_REGEX) for the entire call. `idle` must be corroborated with that text
 # exactly like `unknown` already is, not trusted outright - the bug this
@@ -991,6 +990,30 @@ SH
   pass "no timeout command uses perl bound"
 }
 
+# Current delivery modes must never invoke the legacy compatibility provider.
+test_direct_pr_skips_legacy_lookup() {
+  reset_fakes
+  local d calls_file out calls
+  d=$(new_case direct-pr-no-legacy-lookup)
+  make_repo_on_branch "$d/wt" fm/direct-pr
+  make_fakebin "$d" >/dev/null
+  calls_file="$d/legacy.calls"
+  : > "$calls_file"
+  cat > "$d/fakebin/no-mistakes" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${FM_FAKE_NM_CALLS:-/dev/null}"
+exit 0
+SH
+  chmod +x "$d/fakebin/no-mistakes"
+  fm_write_meta "$d/state/direct-pr.meta" "window=fm:fm-direct-pr" "worktree=$d/wt" "kind=ship" "mode=direct-PR"
+  FM_FAKE_BUSY=1
+  out=$(FM_FAKE_NM_CALLS="$calls_file" run_crew_state "$d" direct-pr)
+  assert_contains "$out" "source: pane" "direct-PR state reads the pane"
+  calls=$(awk 'END { print NR + 0 }' "$calls_file" 2>/dev/null || echo 0)
+  [ "$calls" -eq 0 ] || fail "direct-PR state invoked the legacy provider ($calls calls)"
+  pass "direct-PR state skips the legacy compatibility lookup"
+}
+
 # (i) kind=scout skips the run lookup entirely (its deliverable is a report).
 test_scout_skips_run_lookup() {
   reset_fakes
@@ -1121,6 +1144,7 @@ test_dead_window_ignores_stale_status_log
 test_dead_window_still_reports_terminal_run_step
 test_dead_window_still_reports_active_run_step
 test_no_timeout_uses_perl_bound
+test_direct_pr_skips_legacy_lookup
 test_scout_skips_run_lookup
 test_torn_down_worktree
 test_missing_meta
