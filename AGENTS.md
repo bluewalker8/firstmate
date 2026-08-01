@@ -109,7 +109,7 @@ state/               volatile runtime signals; gitignored
   .watch-triage.log  watcher's absorbed-wake debug log (size-capped); never relied on, safe to delete
   .last-watcher-beat watcher liveness beacon, touched every poll (including while absorbing benign wakes); guard scripts read it
   .subsuper-* .supervise-daemon.*   sub-supervisor internals; never touch
-.no-mistakes/        local validation state and evidence; gitignored
+.no-mistakes/        legacy compatibility state and historical evidence; gitignored
 ```
 
 The shell working directory persists between commands, so after any `cd` away from the home, invoke `bin/` scripts by the absolute path to this repo's `bin/` directory; the scripts self-locate internally, so only invocation is cwd-fragile.
@@ -337,7 +337,7 @@ It sweeps the current session for uncaptured durable knowledge, routes findings 
 
 - `direct-PR` (default) - isolated lane -> self-review and targeted checks -> push and open a PR via `gh-axi` -> PR CI -> captain merge -> integrated verification.
 - `local-only` - local branch, no remote, no PR; firstmate reviews the diff, the captain approves, firstmate merges to local `main` (section 7).
-- `no-mistakes` (legacy compatibility only) - retained for projects already registered in that mode and for scripts that still recognize it; never select it for a new project.
+- `no-mistakes` (legacy record only) - retained so existing registry and task records reconcile safely; delivery follows the `direct-PR` contract, and no agent starts, resumes, waits on, or depends on that tool.
 
 Orthogonal to mode is an optional `+yolo` flag (`[direct-PR +yolo]`), default off and **not recommended**: with `yolo` on, firstmate makes the approval decisions itself instead of asking the captain (section 7).
 When the captain adds a project without saying, record `[direct-PR]` with yolo off; only set `local-only` or `+yolo` on the captain's explicit say-so.
@@ -349,7 +349,7 @@ Existing unbracketed registry entries continue to resolve as `no-mistakes` for p
 Creating a GitHub repo is outward-facing, so get the captain's consent before touching GitHub: propose the repo name, owner/org, visibility (default private), and delivery mode, and create with `gh-axi` only after the captain confirms.
 Then clone it into `projects/<name>` and record `[direct-PR]` unless the captain chose `local-only`.
 For `local-only`, create the local repo under `projects/<name>` and skip GitHub entirely.
-The existing initialization exception and supporting scripts remain only for already-registered legacy `no-mistakes` projects; do not initialize new projects into that mode.
+Never initialize a project into the legacy mode or install its former delivery tool.
 
 ## 7. Task lifecycle
 
@@ -384,7 +384,7 @@ When you create a new secondmate, hand its in-scope queued items off from the ma
 
 Then classify the shape:
 
-- **Ship** (the default): the deliverable is a change to the project. It ships through the project's delivery mode: `direct-PR`, `local-only`, or legacy-compatible `no-mistakes`.
+- **Ship** (the default): the deliverable is a change to the project. It ships through `direct-PR` or `local-only`; a legacy `no-mistakes` record follows `direct-PR` delivery.
 - **Scout:** the deliverable is knowledge - an investigation, a plan, a bug reproduction, an audit. It ends in a report at `data/<id>/report.md`, never a PR. When the captain asks "what's wrong", "how would we", or "find out why" about a project, that is a scout task; dispatch it instead of doing the digging yourself.
 
 Then classify readiness:
@@ -437,7 +437,7 @@ The Validate and open PR / PR ready / Ship teardown stages below are written for
 
 - **direct-PR** - the crewmate owns the isolated lane through the self-review, targeted checks, push, and PR described below, then reports `done: PR <url>`.
 - **local-only** - no remote, no PR. The crewmate stops at `done: ready in branch fm/<id>`. Review the diff with `bin/fm-review-diff.sh <id>`, relay a one-paragraph summary to the captain, and on approval run `bin/fm-merge-local.sh <id>` to fast-forward local `main` (it refuses anything but a clean fast-forward - if it does, have the crewmate rebase). No `fm-pr-check`. Then teardown, whose safety check requires the branch already merged into local `main`, OR the work pushed to any remote (a fork counts - relevant for upstream-contribution PRs on a local-only-registered project).
-- **no-mistakes** - compatibility only for projects already registered in that mode. Existing scripts, run-state reads, evidence handling, and landed-work checks remain supported, but this is not a selectable default for new projects.
+- **no-mistakes** - a compatibility value for existing registry and task records only. Treat its ship tasks exactly like `direct-PR`; only read-only run-state reconciliation, existing evidence handling, and landed-work teardown checks remain supported.
 
 When reviewing any crewmate branch diff, use `bin/fm-review-diff.sh <id>` rather than `git diff <default>...branch` directly.
 Pooled clones keep their local default refs frozen at clone time and can lag `origin`; the helper always compares against the authoritative base.
@@ -464,15 +464,13 @@ UI work requires browser verification of the changed behavior with a real screen
 When the diff and targeted checks are clean, the crewmate pushes only its feature branch, opens the PR with `gh-axi`, and reports `done: PR <full URL>`.
 The default lane does not depend on a heavyweight validation pipeline; PR CI is the independent shipping check.
 
-For an already-active legacy `no-mistakes` run, compatibility state remains readable through `bin/fm-crew-state.sh <id>`.
-That helper reconciles the branch-matched legacy run-step against the crewmate's append-only status-event log and pane liveness, so do not infer current state from a raw status-log tail.
-Use `no-mistakes axi status` only when the full findings for an existing legacy run are needed.
-Do not route new projects or normal direct-PR tasks into this compatibility path, and do not send harness-specific skill invocations for it.
+For an already-recorded legacy run, compatibility state remains readable only through `bin/fm-crew-state.sh <id>` so existing tasks can be reconciled safely.
+Do not invoke the legacy tool directly, resume or wait on its run, route any delivery through it, or send a harness-specific skill invocation for it.
+Steer any unfinished legacy task onto the direct-PR self-review, targeted-checks, push, and PR contract above.
 
 ### PR ready
 
-For the default `direct-PR` path, the ready signal is `done: PR <url>` after the crewmate opens the PR.
-An already-registered legacy task may retain its existing checks-green status convention.
+For every PR-based path, including a legacy mode record, the ready signal is `done: PR <url>` after the crewmate opens the PR.
 Run `bin/fm-pr-check.sh <id> <PR url>` - it records `pr=` and GitHub's `pr_head=` when available in the task's meta and arms the watcher's merge poll.
 Tell the captain: the PR's full URL (always the complete `https://...` link, never a bare `#number` - the captain's terminal makes a full URL clickable) and a one-paragraph summary.
 (The check contract, for any custom `state/<id>.check.sh` you write yourself: print one line only when firstmate should wake, print nothing otherwise, and finish before `FM_CHECK_TIMEOUT`.)
@@ -529,7 +527,7 @@ Whenever at least one task is in flight, keep exactly one live supervision wait 
 The emitted block is the only per-harness operating recipe in the session context.
 Do not substitute another harness's command shape for it.
 **Always-on wake triage (absorb only when provably working).**
-`bin/fm-watch.sh` classifies every wake in bash and absorbs the benign majority without waking you: crews with positive working evidence (an actively-running legacy no-mistakes step for their branch, or a busy pane, read via `bin/fm-crew-state.sh`), a declared `paused:` external wait until its bounded recheck cadence, and no-change heartbeats.
+`bin/fm-watch.sh` classifies every wake in bash and absorbs the benign majority without waking you: crews with positive working evidence (a busy pane, or read-only compatibility state for an existing legacy record, read via `bin/fm-crew-state.sh`), a declared `paused:` external wait until its bounded recheck cadence, and no-change heartbeats.
 It never absorbs a crewmate that stopped without that evidence - whatever its stale status log claims - and only an actionable wake is queued durably and ends the supervision wait, so you resume the emitted protocol exactly once per actionable event.
 A `paused:` status is a deliberate external wait, not `blocked:`; its initial signal still surfaces once, and a forgotten pause re-surfaces for a recheck once per window.
 Repeated provably-working stale escalations on one unchanged pane eventually add `demand-deep-inspection` to the wake reason so it is not mistaken for another routine validation wait.
@@ -606,9 +604,9 @@ On every verified primary harness, "no turn ends blind" has a structural backsto
 Watcher liveness is harness-aware.
 Do not assume one primary harness can use another harness's foreground or background shape.
 For example, Claude uses a background-notify cycle, while Codex intentionally uses bounded foreground checkpoints.
-A crewmate with an already-active legacy `no-mistakes` run still drives that compatibility loop synchronously and processes every return, never idle-waiting for it to advance on its own.
+Never instruct a crewmate to drive, resume, or wait on a legacy validation run; move unfinished delivery onto the direct-PR contract.
 
-Token discipline: for a crewmate's current state prefer `bin/fm-crew-state.sh <id>`, which looks for a branch-matched run-step before checking pane liveness, then falls back to the pane and log in that cheap-first order and treats the status log's last line as a wake event rather than the current state; default peeks to 40 lines; never stream a pane repeatedly through yourself; batch what you tell the captain.
+Token discipline: for a crewmate's current state prefer `bin/fm-crew-state.sh <id>`, which checks read-only branch-matched state only for an existing legacy record before checking pane liveness, then falls back to the pane and log in that cheap-first order and treats the status log's last line as a wake event rather than the current state; default peeks to 40 lines; never stream a pane repeatedly through yourself; batch what you tell the captain.
 The context-% shown in a peek is not actionable as crew health; ignore it and intervene only on real signals (`signal`, `stale`, `needs-decision`, `blocked`), looping or confusion in the pane, or a question the brief already answers.
 
 ### Away-mode stub
@@ -713,9 +711,9 @@ Correct or delete stale free-form notes the moment you catch them, and put durab
 
 Scaffold with `bin/fm-brief.sh <id> <repo-name>` - it writes `data/<id>/brief.md` with the standard contract (branch setup, status-reporting protocol, push/merge rules, definition of done) and all paths filled in.
 The ship-brief Setup opens with a worktree-isolation assertion ahead of the branch step: the crewmate confirms it is in its own disposable task worktree, not the primary checkout, and stops with `blocked: launched in primary checkout, not an isolated worktree` if not - the upstream half of the worktree-tangle guard (section 8).
-For a ship task the definition of done is shaped by the project's delivery mode (section 6): default `direct-PR` owns the lane through the opened PR, `local-only` stops at "ready in branch" for firstmate to review and merge locally, and `no-mistakes` remains a legacy compatibility shape only.
-For every direct-PR brief, ensure its definition of done requires section 7's authoritative-base self-review and relevant targeted checks before the push and PR; add only the project-specific commands needed to make that contract concrete.
-Legacy no-mistakes brief mechanics remain script-owned compatibility documentation and are not instructions for normal delivery.
+For a ship task the definition of done is shaped by the project's delivery mode (section 6): default `direct-PR` owns the lane through the opened PR, `local-only` stops at "ready in branch" for firstmate to review and merge locally, and a legacy `no-mistakes` record generates the same direct-PR brief.
+For every PR-based brief, ensure its definition of done requires section 7's authoritative-base self-review and relevant targeted checks before the push and PR; add only the project-specific commands needed to make that contract concrete.
+No generated brief may invoke, initialize, resume, wait on, or depend on `no-mistakes`.
 The scaffold reads the mode via `fm-project-mode.sh`, so you do not pass it.
 Ship briefs also include the project-memory contract: run `bin/fm-ensure-agents-md.sh` when the project already has agent-memory files or when the task produced durable project-intrinsic knowledge, then record proportionate learnings in `AGENTS.md`.
 For scout tasks add `--scout`: the scaffold swaps the definition of done for the report contract (findings to `data/<id>/report.md`, no branch, no push, no PR) and declares the worktree scratch; scout is mode-agnostic.

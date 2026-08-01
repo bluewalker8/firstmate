@@ -17,8 +17,8 @@ set -u
 TMP_ROOT=$(fm_test_tmproot fm-brief)
 
 # The script itself must always parse. This is the direct regression test for
-# issue #166: a stray apostrophe in any of the three DOD heredoc bodies
-# (no-mistakes/direct-PR/local-only) breaks `bash -n` on the whole file.
+# issue #166: a stray apostrophe in either DOD heredoc body breaks `bash -n` on
+# the whole file.
 test_script_parses() {
   bash -n "$ROOT/bin/fm-brief.sh" 2>&1 || fail "bin/fm-brief.sh fails bash -n (heredoc/quote regression)"
   pass "fm-brief.sh: bash -n succeeds"
@@ -31,14 +31,15 @@ test_help_includes_entire_header() {
   pass "fm-brief.sh: --help renders the complete header"
 }
 
-# Registry with one project per delivery mode, so each ship-mode DOD branch is
-# exercised. A project absent from the registry defaults to no-mistakes.
+# Registry fixtures exercise direct-PR, local-only, and a legacy delivery-mode
+# record that must now render the direct-PR contract.
 write_registry() {
   local home=$1
   mkdir -p "$home/data"
   cat > "$home/data/projects.md" <<'EOF'
 - direct-proj [direct-PR] - fixture for direct-PR mode (added 2026-07-01)
 - local-proj [local-only] - fixture for local-only mode (added 2026-07-01)
+- legacy-proj [no-mistakes] - fixture for a legacy mode record (added 2026-07-01)
 EOF
 }
 
@@ -52,7 +53,7 @@ test_ship_modes_generate_clean_briefs() {
   home="$TMP_ROOT/ship-home"
   write_registry "$home"
 
-  for id_proj in "brief-nomistakes-a1:no-registry-proj" "brief-directpr-a2:direct-proj" "brief-localonly-a3:local-proj"; do
+  for id_proj in "brief-default-a1:no-registry-proj" "brief-directpr-a2:direct-proj" "brief-localonly-a3:local-proj" "brief-legacy-a4:legacy-proj"; do
     id=${id_proj%%:*}
     proj=${id_proj##*:}
     FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" >/dev/null 2>&1; status=$?
@@ -63,24 +64,33 @@ test_ship_modes_generate_clean_briefs() {
     assert_grep "{TASK}" "$brief" "$id: brief missing the {TASK} placeholder"
     assert_no_grep "EOF" "$brief" "$id: brief leaked a heredoc EOF marker (unterminated heredoc)"
   done
-  pass "fm-brief.sh: no-mistakes/direct-PR/local-only briefs generate cleanly"
+  pass "fm-brief.sh: default/direct-PR/local-only/legacy briefs generate cleanly"
 }
 
-# Pin the specific line the bug lived on: the no-mistakes DOD's no-mistakes
-# reference must render as plain prose with no dangling apostrophe artifact.
-test_no_mistakes_dod_wording() {
-  local home id brief
-  home="$TMP_ROOT/wording-home"
-  mkdir -p "$home/data"
-  id="brief-wording-b1"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj >/dev/null 2>&1
-  brief="$home/data/$id/brief.md"
-  assert_present "$brief" "brief was not scaffolded"
-  assert_grep "no-mistakes itself provides for the mechanics" "$brief" \
-    "no-mistakes DOD lost its guidance-reference sentence"
-  assert_no_grep "no-mistakes' own guidance" "$brief" \
-    "no-mistakes DOD regressed to the apostrophe form that breaks bash -n"
-  pass "fm-brief.sh: no-mistakes DOD wording avoids the apostrophe regression"
+# Every PR-based project, including a legacy registry record, gets the complete
+# direct-PR contract and no prohibited delivery invocation.
+test_direct_pr_delivery_contract() {
+  local home id proj brief
+  home="$TMP_ROOT/direct-pr-contract-home"
+  write_registry "$home"
+  for id_proj in "brief-default-b1:no-registry-proj" "brief-direct-b2:direct-proj" "brief-legacy-b3:legacy-proj"; do
+    id=${id_proj%%:*}
+    proj=${id_proj##*:}
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" >/dev/null 2>&1
+    brief="$home/data/$id/brief.md"
+    assert_present "$brief" "$id: brief was not scaffolded"
+    assert_grep "self-review the complete diff against that base line by line" "$brief" \
+      "$id: brief lost authoritative-base self-review"
+    assert_grep "narrowest relevant tests plus typecheck and lint" "$brief" \
+      "$id: brief lost targeted checks"
+    assert_grep "open a PR with \`gh-axi\`" "$brief" "$id: brief lost gh-axi PR delivery"
+    assert_grep "PR CI is firstmate's independent shipping check" "$brief" \
+      "$id: brief lost PR CI ownership"
+    assert_grep "merges sequentially only after checks pass, then performs integrated verification" "$brief" \
+      "$id: brief lost sequential merge and integrated verification"
+    assert_no_grep "no-mistakes" "$brief" "$id: brief contains a prohibited delivery reference"
+  done
+  pass "fm-brief.sh: all PR-based modes render the direct-PR delivery contract"
 }
 
 test_ship_project_memory_wording() {
@@ -261,7 +271,7 @@ test_pause_verb_override_renders_all_brief_scaffolds() {
 test_script_parses
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
-test_no_mistakes_dod_wording
+test_direct_pr_delivery_contract
 test_ship_project_memory_wording
 test_herdr_lab_contract_is_explicit_and_complete
 test_herdr_lab_contract_quotes_foreign_firstmate_path

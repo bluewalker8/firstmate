@@ -8,14 +8,14 @@
 # written or cached.
 #
 # Stage model (cheapest-first; fm-crew-state.sh is consulted only for the
-# genuinely ambiguous cases - a "working" verb (implementing vs. an active
-# no-mistakes run) or a "needs-decision"/"blocked" verb (possibly stale) -
+# genuinely ambiguous cases - a "working" verb (implementing vs. read-only
+# compatibility state) or a "needs-decision"/"blocked" verb (possibly stale) -
 # never re-deriving run-step logic that script already owns):
 #   spawned    - meta exists, no status lines yet.
 #   working    - a "working" status line, not a review note, not a run.
 #   review     - the last "working" note mentions a line-review/fable review.
-#   validating - fm-crew-state.sh reports state=working source=run-step (an
-#                active no-mistakes run for this branch).
+#   validating - fm-crew-state.sh reports state=working source=run-step for an
+#                existing legacy task record.
 #   PR open    - meta records pr= (set once fm-pr-check.sh sees the PR).
 #   gated      - fm-crew-state.sh's CURRENT state is parked/blocked, checked
 #                only when the log's last verb was needs-decision/blocked
@@ -102,7 +102,7 @@ note_of() {  # <status-line>
 
 # crew_current_state: the one place this script shells out to fm-crew-state.sh.
 # Prints "state|source" (e.g. "working|run-step"); "unknown|none" on any
-# failure. FM_BOARD_NM_TIMEOUT bounds the no-mistakes CLI call tighter than
+# failure. FM_BOARD_NM_TIMEOUT bounds the legacy compatibility read tighter than
 # fm-crew-state.sh's own 10s default, since a --watch popup re-renders every
 # few seconds and must stay snappy.
 crew_current_state() {  # <id>
@@ -296,8 +296,8 @@ gated_count_override() {
 }
 
 # Stage cache, keyed on (id, meta mtime, status-log mtime): --watch re-renders
-# every few seconds, and detect_stage's ambiguous branches shell out to the
-# no-mistakes CLI (several seconds each). Neither file's mtime can change
+# every few seconds, and detect_stage's ambiguous branches may perform a
+# legacy compatibility read (several seconds each). Neither file's mtime can change
 # without a genuinely captain-relevant event (a new status append, pr= being
 # recorded), so re-detecting only on a real mtime change turns the steady-
 # state watch loop into pure cheap reads instead of hammering the CLI every
@@ -308,9 +308,8 @@ gated_count_override() {
 #
 # slow=1 entries additionally expire on FM_BOARD_CACHE_TTL: a "gated" or
 # "validating" classification came from fm-crew-state.sh reconciling state
-# that can change with NO local file write at all (the captain answers a
-# needs-decision gate via `no-mistakes axi respond`, and the crew resumes
-# silently - no new status append, no meta change). Caching that result on
+# that can change with no local file write at all for an existing legacy task.
+# Caching that result on
 # mtimes alone would make a resolved gate read as "gated on you" forever;
 # the TTL re-checks it periodically instead. slow=0 entries (spawned, a
 # done/failed/PR-open verdict read straight off the log or meta, a review
