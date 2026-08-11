@@ -32,7 +32,8 @@
 #                       when this session actually holds the lock.
 #   3. wake-drain     - mutates the durable wake queue, so it also only runs
 #                       when locked.
-#   4. context digest - data/projects.md, data/secondmates.md, data/captain.md,
+#   4. context digest - the compiled global brain hot view, data/projects.md,
+#                       data/secondmates.md, data/captain.md, and
 #                       data/learnings.md: read-only, always safe, always runs.
 #   5. fleet digest   - data/backlog.md, every state/*.meta, a bounded
 #                       state/*.status tail, state/.afk, and a cheap
@@ -109,6 +110,22 @@ print_file_or_absent() {
   else
     printf 'ABSENT\n'
   fi
+}
+
+print_brain_hot_or_absent() {
+  local path=$1 hot_bytes
+  subsection "compiled Firstmate brain hot view (read-only)"
+  if [ ! -f "$path" ]; then
+    printf 'ABSENT\n'
+    return
+  fi
+  hot_bytes=$(wc -c < "$path" | tr -d ' ')
+  case "$hot_bytes" in ''|*[!0-9]*) hot_bytes=999999 ;; esac
+  if [ "$hot_bytes" -gt 6000 ]; then
+    printf 'WITHHELD: compiled hot view exceeds the 6,000-byte safety bound (%s bytes)\n' "$hot_bytes"
+    return
+  fi
+  cat "$path"
 }
 
 print_status_tail() {
@@ -227,6 +244,18 @@ fi
 
 # --- 4. context digest -----------------------------------------------------
 section "CONTEXT"
+brain_vault=${FM_BRAIN_VAULT:-}
+if [ -f "$CONFIG/brain-vault" ]; then
+  IFS= read -r brain_vault < "$CONFIG/brain-vault" || brain_vault=''
+fi
+if [ -z "$brain_vault" ]; then
+  encoded_home=${HOME//\//-}
+  discovered_vault="$HOME/.claude/projects/$encoded_home/memory"
+  if [ -d "$discovered_vault/.obsidian" ]; then
+    brain_vault=$discovered_vault
+  fi
+fi
+print_brain_hot_or_absent "${brain_vault:-/nonexistent}/firstmate-brain/generated/hot/global.md"
 print_file_or_absent "$DATA/projects.md" "data/projects.md"
 print_file_or_absent "$DATA/secondmates.md" "data/secondmates.md"
 print_file_or_absent "$DATA/captain.md" "data/captain.md"

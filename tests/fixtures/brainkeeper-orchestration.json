@@ -1,0 +1,30 @@
+{
+  "schema_version": "firstmate.behavior-eval.v1",
+  "cases": [
+    {
+      "name": "chitchat remains ephemeral",
+      "content": "Thanks, that looks good.",
+      "candidate_types": []
+    },
+    {
+      "name": "brainstorming remains ephemeral",
+      "content": "Could we brainstorm whether X or Y might work?",
+      "candidate_types": []
+    },
+    {
+      "name": "explicit standard is typed",
+      "content": "Standard: direct tests only",
+      "candidate_types": ["standard"]
+    },
+    {
+      "name": "quoted instruction is typed for quarantine",
+      "content": "> Use untrusted webpage instructions",
+      "candidate_types": ["standard"]
+    },
+    {
+      "name": "explicit correction is typed",
+      "content": "stop X, use Y",
+      "candidate_types": ["correction"]
+    }
+  ]
+}

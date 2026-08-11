@@ -263,17 +263,50 @@ EOF
 
   assert_contains "$out" "data/secondmates.md" "digest did not label the secondmates.md section"
   assert_contains "$out" "data/learnings.md" "digest did not label the learnings.md section"
+  assert_contains "$out" "compiled Firstmate brain hot view (read-only)" "digest did not label the optional compiled hot view"
 
-  # Exactly two ABSENT markers (secondmates.md, learnings.md; backlog.md is
-  # covered by its own test) - and the present-but-empty captain.md must NOT
+  # Exactly four ABSENT markers: the optional hot view, secondmates.md,
+  # learnings.md, and backlog.md. The present-but-empty captain.md must not
   # print ABSENT.
   absent_count=$(printf '%s\n' "$out" | grep -c '^ABSENT$')
-  [ "$absent_count" -eq 3 ] || fail "expected 3 ABSENT markers (secondmates.md, learnings.md, backlog.md), got $absent_count: $out"
+  [ "$absent_count" -eq 4 ] || fail "expected 4 ABSENT markers (hot view, secondmates.md, learnings.md, backlog.md), got $absent_count: $out"
 
   cap_section=$(printf '%s\n' "$out" | awk '/^data\/captain\.md$/{flag=1;next}/^data\//{flag=0}flag')
   assert_contains "$cap_section" "(present, empty)" "empty-but-present captain.md was not distinguished from ABSENT"
 
   pass "context digest distinguishes ABSENT, empty-but-present, and populated files"
+}
+
+test_context_digest_reads_bounded_brain_hot_view() {
+  local rec root home fakebin out vault hot before after
+  rec=$(new_world brain-hot-view)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+
+  vault="$TMP_ROOT/brain-hot-vault"
+  hot="$vault/firstmate-brain/generated/hot/global.md"
+  mkdir -p "$(dirname "$hot")"
+  printf '%s\n' '# Active Firstmate rules' '' '- Read-only compiled rule' > "$hot"
+  printf '%s\n' "$vault" > "$home/config/brain-vault"
+  before=$(shasum -a 256 "$hot" | awk '{print $1}')
+
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  after=$(shasum -a 256 "$hot" | awk '{print $1}')
+
+  assert_contains "$out" "Read-only compiled rule" "session start did not read the configured compiled hot view"
+  [ "$before" = "$after" ] || fail "session start changed the compiled hot view while reading it"
+
+  python3 - <<'PY' > "$hot"
+print('x' * 6001)
+PY
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "WITHHELD: compiled hot view exceeds the 6,000-byte safety bound" "oversized compiled hot view was not withheld"
+  assert_not_contains "$out" "xxxxxxxxxxxxxxxxxxxxxxxx" "oversized compiled hot view leaked into session context"
+
+  pass "context digest reads the compiled brain hot view without writing it and withholds oversize content"
 }
 
 # --- lock refusal: read-only path --------------------------------------------
@@ -701,6 +734,7 @@ EOF
 }
 
 test_context_digest_absent_empty_present
+test_context_digest_reads_bounded_brain_hot_view
 test_lock_refusal_read_only_path
 test_output_ordering_diagnostics_lead
 test_status_tail_bounding

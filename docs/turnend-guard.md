@@ -37,7 +37,9 @@ If `jq` is missing or hook stdin is empty, the guard fails open and exits 0 beca
 All verified primary harnesses have a tracked integration:
 
 - `claude`: `.claude/settings.json` registers a `Stop` hook command anchored through `"$CLAUDE_PROJECT_DIR"/bin/fm-turnend-guard.sh`.
-- `codex`: `.codex/hooks.json` registers a `Stop` hook that reads the hook payload once, anchors the executable to the hook command process working directory, verifies that root is firstmate-shaped and hook-bearing, and pipes the original payload to that checkout's `bin/fm-turnend-guard.sh`.
+- `codex`: `.codex/hooks.json` registers a `UserPromptSubmit` capture hook and a `Stop` hook that reads the hook payload once, anchors the executable to the hook command process working directory, and invokes `bin/fm-turn-complete.sh`.
+  The wrapper pipes the original payload to `bin/fm-turnend-guard.sh` and captures the exchange only after the guard accepts the final stop.
+  Linked worktrees and secondmate homes remain inert.
 - `opencode`: `.opencode/plugins/fm-primary-turnend-guard.js` listens for `session.idle`, lets the watcher-arm coordinator handle normal idle supervision first, runs the shared guard only when that coordinator does not act, and uses `client.session.promptAsync` to force one follow-up prompt when the guard returns 2.
 - `pi`: `.pi/extensions/fm-primary-turnend-guard.ts` listens for `agent_settled`, marks the extension version loaded for session-start checks, runs the shared guard once per logical agent run, and uses `pi.sendUserMessage(..., { deliverAs: "followUp" })` to force one follow-up prompt when the guard returns 2.
 - `grok`: `.grok/hooks/fm-primary-turnend-guard.json` registers a `Stop` hook that invokes `bin/fm-turnend-guard-grok.sh`.

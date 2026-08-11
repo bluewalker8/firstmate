@@ -7,6 +7,10 @@ If you have changed away from the firstmate home in an interactive shell, invoke
 | Script                   | Purpose                                                                              |
 | ------------------------ | ------------------------------------------------------------------------------------ |
 | `fm-session-start.sh`    | Compose lock, bootstrap, and wake drain into the single ordered session-start digest |
+| `fm-turn-capture.sh`     | Deterministically capture one completed primary turn into the private immutable inbox |
+| `fm-turn-complete.sh`    | Chain the primary Stop guard, then capture only an accepted completed turn             |
+| `fm-brainkeeper.sh`      | Role-gated Brainkeeper drain, serve, query, health, rebuild, and rollback commands      |
+| `fm-brain-context.sh`    | Read-only complete decision context for exact scope and requested topics                 |
 | `fm-bootstrap.sh`        | Detect toolchain and fleet problems, run the locked session-start sweeps, and install approved tools |
 | `fm-fleet-sync.sh`       | Refresh project clones with safe fast-forwards, self-heals, `STUCK:` reports, and branch pruning |
 | `fm-fleet-snapshot.sh`   | Print the read-only structured fleet snapshot JSON (schema `fm-fleet-snapshot.v1`)   |
