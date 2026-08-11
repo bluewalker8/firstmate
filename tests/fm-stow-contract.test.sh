@@ -17,13 +17,13 @@ test_stow_skill_task_note_contract() {
 }
 
 test_agents_backlog_task_note_contract() {
-  local agents="$ROOT/AGENTS.md"
+  local agents="$ROOT/docs/agents/state-and-privacy.md"
 
-  assert_grep 'tasks-axi show <id> --full' "$agents" "AGENTS.md does not require inspecting task notes first"
-  assert_grep 'tasks-axi update <id> --body-file <path>' "$agents" "AGENTS.md does not require task body replacement"
-  assert_grep '--archive-body' "$agents" "AGENTS.md does not document recoverable task body archival"
-  assert_no_grep 'carry that context into the replacement body' "$agents" "AGENTS.md still preserves archive-only context in the replacement body"
-  pass "AGENTS.md task-note contract includes recoverable body archival"
+  assert_grep 'tasks-axi show <id> --full' "$agents" "state reference does not require inspecting task notes first"
+  assert_grep 'tasks-axi update <id> --body-file <path>' "$agents" "state reference does not require task body replacement"
+  assert_grep '--archive-body' "$agents" "state reference does not document recoverable task body archival"
+  assert_no_grep 'carry that context into the replacement body' "$agents" "state reference still preserves archive-only context in the replacement body"
+  pass "state reference task-note contract includes recoverable body archival"
 }
 
 test_stow_skill_task_note_contract
